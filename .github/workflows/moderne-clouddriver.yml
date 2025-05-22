@@ -3,7 +3,7 @@ name: Build and Upload Clouddriver
 on:
   pull_request:
     types:
-      - closed
+      - opened
     branches:
       - main
       - moderne
