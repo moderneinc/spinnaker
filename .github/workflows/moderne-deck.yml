@@ -1,6 +1,9 @@
 name: Build and Upload Deck
 
 on:
+  push:
+    branches:
+      - moderne
   pull_request:
     types:
       - opened
