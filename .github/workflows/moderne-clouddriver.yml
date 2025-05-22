@@ -1,6 +1,9 @@
 name: Build and Upload Clouddriver
 
 on:
+  push:
+    branches:
+      - moderne
   pull_request:
     types:
       - opened
