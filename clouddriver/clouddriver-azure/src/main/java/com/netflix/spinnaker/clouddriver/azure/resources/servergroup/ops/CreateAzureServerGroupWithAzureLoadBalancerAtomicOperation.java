@@ -16,8 +16,6 @@
 
 package com.netflix.spinnaker.clouddriver.azure.resources.servergroup.ops;
 
-import static com.netflix.spinnaker.clouddriver.azure.resources.servergroup.ops.CreateAzureServerGroupAtomicOperation.SERVER_WAIT_TIMEOUT;
-
 import com.azure.resourcemanager.compute.models.VirtualMachineImage;
 import com.azure.resourcemanager.resources.models.Deployment;
 import com.netflix.spinnaker.clouddriver.azure.common.AzureUtilities;
@@ -314,8 +312,7 @@ public class CreateAzureServerGroupWithAzureLoadBalancerAtomicOperation
             description
                 .getCredentials()
                 .getComputeClient()
-                .waitForScaleSetHealthy(
-                    resourceGroupName, description.getName(), SERVER_WAIT_TIMEOUT);
+                .waitForScaleSetHealthy(resourceGroupName, description.getName());
 
         if (healthy) {
           getTask()

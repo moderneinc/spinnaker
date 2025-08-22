@@ -118,14 +118,9 @@ public class ResizeAzureServerGroupAtomicOperation implements AtomicOperation<Vo
               .getCredentials()
               .getComputeClient()
               .resizeServerGroup(resourceGroupName, description.getName(), targetSize);
-          getTask()
-              .updateStatus(
-                  BASE_PHASE,
-                  "Done resizing Azure server group "
-                      + description.getName()
-                      + " in "
-                      + region
-                      + ".");
+
+          // Wait for instances to be healthy after resize
+          waitForHealthy(resourceGroupName, serverGroupDescription, region, errList);
         } catch (Exception e) {
           getTask()
               .updateStatus(
@@ -154,5 +149,42 @@ public class ResizeAzureServerGroupAtomicOperation implements AtomicOperation<Vo
     }
 
     return null;
+  }
+
+  private void waitForHealthy(
+      String resourceGroupName,
+      AzureServerGroupDescription serverGroupDescription,
+      String region,
+      ArrayList<String> errList) {
+    getTask()
+        .updateStatus(
+            BASE_PHASE,
+            "Waiting for instances in Azure server group "
+                + serverGroupDescription.getName()
+                + " to be healthy...");
+
+    boolean healthy =
+        description
+            .getCredentials()
+            .getComputeClient()
+            .waitForScaleSetHealthy(resourceGroupName, serverGroupDescription.getName());
+
+    if (healthy) {
+      getTask()
+          .updateStatus(
+              BASE_PHASE,
+              "Done resizing Azure server group "
+                  + serverGroupDescription.getName()
+                  + " in "
+                  + region
+                  + ".");
+    } else {
+      errList.add(
+          "Server group "
+              + serverGroupDescription.getName()
+              + " in "
+              + region
+              + " did not come up in time.");
+    }
   }
 }

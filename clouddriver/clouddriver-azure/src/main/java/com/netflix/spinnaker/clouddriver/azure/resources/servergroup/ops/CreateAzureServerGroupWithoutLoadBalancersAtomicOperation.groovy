@@ -29,8 +29,6 @@ import com.netflix.spinnaker.clouddriver.orchestration.AtomicOperation
 import com.netflix.spinnaker.clouddriver.orchestration.AtomicOperationException
 import org.springframework.beans.factory.annotation.Autowired
 
-import static com.netflix.spinnaker.clouddriver.azure.resources.servergroup.ops.CreateAzureServerGroupAtomicOperation.*
-
 class CreateAzureServerGroupWithoutLoadBalancersAtomicOperation implements AtomicOperation<Map> {
   private static final String BASE_PHASE = "CREATE_SERVER_GROUP"
 
@@ -144,7 +142,7 @@ class CreateAzureServerGroupWithoutLoadBalancersAtomicOperation implements Atomi
           "serverGroup",
           templateParameters)
 
-        def healthy = description.credentials.computeClient.waitForScaleSetHealthy(resourceGroupName, description.name, SERVER_WAIT_TIMEOUT)
+        def healthy = description.credentials.computeClient.waitForScaleSetHealthy(resourceGroupName, description.name)
 
         if (healthy) {
           getTask().updateStatus(BASE_PHASE, String.format(

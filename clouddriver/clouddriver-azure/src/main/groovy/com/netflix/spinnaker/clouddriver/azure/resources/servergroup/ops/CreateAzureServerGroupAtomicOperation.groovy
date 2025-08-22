@@ -33,7 +33,6 @@ import com.azure.resourcemanager.resources.models.Deployment
 
 class CreateAzureServerGroupAtomicOperation implements AtomicOperation<Map> {
   private static final String BASE_PHASE = "CREATE_SERVER_GROUP"
-  public static final long SERVER_WAIT_TIMEOUT = 60 * 60 * 1000
 
   private static Task getTask() {
     TaskRepository.threadLocalTask.get()
@@ -229,7 +228,7 @@ class CreateAzureServerGroupAtomicOperation implements AtomicOperation<Map> {
           .networkClient
           .enableServerGroupWithAppGateway(resourceGroupName, description.appGatewayName, description.name)
 
-        def healthy = description.credentials.computeClient.waitForScaleSetHealthy(resourceGroupName, description.name, SERVER_WAIT_TIMEOUT)
+        def healthy = description.credentials.computeClient.waitForScaleSetHealthy(resourceGroupName, description.name)
 
         if (healthy) {
           task.updateStatus BASE_PHASE, "Done enabling Azure server group ${description.name} in ${description.region}."

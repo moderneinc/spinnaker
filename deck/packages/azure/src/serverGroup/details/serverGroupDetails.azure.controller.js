@@ -14,6 +14,7 @@ import {
 
 import '../configure/serverGroup.configure.azure.module';
 import { AZURE_SERVERGROUP_CONFIGURE_SERVERGROUPCOMMANDBUILDER_SERVICE } from '../configure/serverGroupCommandBuilder.service';
+import { AzureResizeServerGroupModal } from './resize/AzureResizeServerGroupModal';
 import { AzureRollbackServerGroupModal } from './rollback/RollbackServerGroupModal';
 
 export const AZURE_SERVERGROUP_DETAILS_SERVERGROUPDETAILS_AZURE_CONTROLLER =
@@ -227,6 +228,11 @@ angular
           taskMonitorConfig: taskMonitor,
           submitMethod: submitMethod,
         });
+      };
+
+      this.resizeServerGroup = () => {
+        const serverGroup = $scope.serverGroup;
+        AzureResizeServerGroupModal.show({ application: app, serverGroup });
       };
 
       this.rollbackServerGroup = () => {
