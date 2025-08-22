@@ -166,39 +166,6 @@ class CreateAzureServerGroupWithoutLoadBalancersAtomicOperation implements Atomi
 
       task.updateStatus(BASE_PHASE, "Deployment for server group ${description.name} in ${description.region} has succeeded.")
     } else {
-      // cleanup any resources that might have been created prior to server group failing to deploy
-      task.updateStatus(BASE_PHASE, "Cleanup any resources created as part of server group upsert")
-      try {
-        if (description.name) {
-          def sgDescription = description.credentials
-            .computeClient
-            .getServerGroup(resourceGroupName, description.name)
-          if (sgDescription) {
-            description.credentials
-              .computeClient
-              .destroyServerGroup(resourceGroupName, description.name)
-
-            // If this an Azure Market Store image, delete the storage that was created for it as well
-            if (!sgDescription.image.isCustom) {
-              sgDescription.storageAccountNames?.each { def storageAccountName ->
-                description.credentials
-                  .storageClient
-                  .deleteStorageAccount(resourceGroupName, storageAccountName)
-              }
-            }
-          }
-        }
-        if (description.hasNewSubnet) {
-          description.credentials
-            .networkClient
-            .deleteSubnet(description.vnetResourceGroup, virtualNetworkName, subnetName)
-        }
-      } catch (Exception e) {
-        def errMessage = "Unexpected exception: ${e.message}! Please log in into Azure Portal and manually delete any resource associated with the ${description.name} server group such as storage accounts, internal load balancer, public IP and subnets"
-        task.updateStatus(BASE_PHASE, errMessage)
-        errList.add(errMessage)
-      }
-
       throw new AtomicOperationException("${description.name} deployment failed", errList)
     }
 
