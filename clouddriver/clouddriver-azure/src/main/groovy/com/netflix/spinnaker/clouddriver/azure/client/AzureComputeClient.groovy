@@ -43,7 +43,7 @@ import java.util.stream.Collectors
 @CompileStatic
 public class AzureComputeClient extends AzureBaseClient {
 
-  public static final long DEFAULT_SERVER_WAIT_TIMEOUT_MILLIS = 4 * 60 * 60 * 1000
+  public static final long DEFAULT_SERVER_WAIT_TIMEOUT_MILLIS = 2 * 60 * 60 * 1000
 
   AzureComputeClient(String subscriptionId, TokenCredential credentials, AzureProfile azureProfile) {
     super(subscriptionId, azureProfile, credentials)
