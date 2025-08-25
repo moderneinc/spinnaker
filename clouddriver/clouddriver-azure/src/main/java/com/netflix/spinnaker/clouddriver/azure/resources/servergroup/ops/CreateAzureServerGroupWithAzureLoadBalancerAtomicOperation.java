@@ -16,8 +16,6 @@
 
 package com.netflix.spinnaker.clouddriver.azure.resources.servergroup.ops;
 
-import static com.netflix.spinnaker.clouddriver.azure.resources.servergroup.ops.CreateAzureServerGroupAtomicOperation.SERVER_WAIT_TIMEOUT;
-
 import com.azure.resourcemanager.compute.models.VirtualMachineImage;
 import com.azure.resourcemanager.resources.models.Deployment;
 import com.netflix.spinnaker.clouddriver.azure.common.AzureUtilities;
@@ -314,8 +312,7 @@ public class CreateAzureServerGroupWithAzureLoadBalancerAtomicOperation
             description
                 .getCredentials()
                 .getComputeClient()
-                .waitForScaleSetHealthy(
-                    resourceGroupName, description.getName(), SERVER_WAIT_TIMEOUT);
+                .waitForScaleSetHealthy(resourceGroupName, description.getName());
 
         if (healthy) {
           getTask()
@@ -343,68 +340,7 @@ public class CreateAzureServerGroupWithAzureLoadBalancerAtomicOperation
               String.format(
                   "Deployment for server group %s in %s has succeeded.",
                   description.getName(), description.getRegion()));
-    }
-    if (!errList.isEmpty()) {
-      // cleanup any resources that might have been created prior to server group failing to deploy
-      getTask()
-          .updateStatus(BASE_PHASE, "Cleanup any resources created as part of server group upsert");
-      try {
-        if (description.getName() != null && description.getName().length() > 0) {
-          AzureServerGroupDescription sgDescription =
-              description
-                  .getCredentials()
-                  .getComputeClient()
-                  .getServerGroup(resourceGroupName, description.getName());
-          if (sgDescription != null) {
-            description
-                .getCredentials()
-                .getComputeClient()
-                .destroyServerGroup(resourceGroupName, description.getName());
-          }
-        }
-      } catch (Exception e) {
-        String errMessage =
-            String.format(
-                "Unexpected exception: %s! Please log in into Azure Portal and manually delete any resource associated with the %s server group such as storage accounts, internal load balancer, public IP and subnets",
-                e.getMessage(), description.getName());
-        getTask().updateStatus(BASE_PHASE, errMessage);
-        errList.add(errMessage);
-      }
-
-      try {
-        if (loadBalancerPoolID != null) {
-          description
-              .getCredentials()
-              .getNetworkClient()
-              .removeLoadBalancerAPforServerGroup(
-                  resourceGroupName, description.getLoadBalancerName(), description.getName());
-        }
-      } catch (Exception e) {
-        String errMessage =
-            String.format(
-                "Unexpected exception: %s! Load balancer backend address pool entry %s associated with the %s server group could not be deleted",
-                e.getMessage(), loadBalancerPoolID, description.getName());
-        getTask().updateStatus(BASE_PHASE, errMessage);
-        errList.add(errMessage);
-      }
-
-      try {
-        if (inboundNatPoolID != null) {
-          description
-              .getCredentials()
-              .getNetworkClient()
-              .removeLoadBalancerNatPoolPortRangeforServerGroup(
-                  resourceGroupName, description.getLoadBalancerName(), description.getName());
-        }
-      } catch (Exception e) {
-        String errMessage =
-            String.format(
-                "Unexpected exception: %s! Load balancer inbound nat pool entry %s associated with the %s server group could not be deleted",
-                e.getMessage(), inboundNatPoolID, description.getName());
-        getTask().updateStatus(BASE_PHASE, errMessage);
-        errList.add(errMessage);
-      }
-
+    } else {
       throw new AtomicOperationException(
           String.format("%s deployment failed", description.getName()), errList);
     }

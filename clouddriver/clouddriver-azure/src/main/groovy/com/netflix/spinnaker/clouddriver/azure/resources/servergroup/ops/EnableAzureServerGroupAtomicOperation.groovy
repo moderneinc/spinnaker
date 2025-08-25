@@ -113,7 +113,7 @@ class EnableAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
   }
 
   private void waitForHealthy(String resourceGroupName, AzureServerGroupDescription serverGroupDescription, String region, ArrayList<String> errList) {
-    def healthy = description.credentials.computeClient.waitForScaleSetHealthy(resourceGroupName, serverGroupDescription.name, CreateAzureServerGroupAtomicOperation.SERVER_WAIT_TIMEOUT)
+    def healthy = description.credentials.computeClient.waitForScaleSetHealthy(resourceGroupName, serverGroupDescription.name)
 
     if (healthy) {
       task.updateStatus BASE_PHASE, "Done enabling Azure server group ${serverGroupDescription.name} in ${region}."

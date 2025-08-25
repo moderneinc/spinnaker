@@ -43,6 +43,8 @@ import java.util.stream.Collectors
 @CompileStatic
 public class AzureComputeClient extends AzureBaseClient {
 
+  public static final long DEFAULT_SERVER_WAIT_TIMEOUT_MILLIS = 2 * 60 * 60 * 1000
+
   AzureComputeClient(String subscriptionId, TokenCredential credentials, AzureProfile azureProfile) {
     super(subscriptionId, azureProfile, credentials)
   }
@@ -236,6 +238,13 @@ public class AzureComputeClient extends AzureBaseClient {
     })
 
     instances
+  }
+
+  /**
+   * check the scale set's health status using the default timeout
+   */
+  Boolean waitForScaleSetHealthy(String resourceGroupName, String serverGroupName) {
+    return waitForScaleSetHealthy(resourceGroupName, serverGroupName, DEFAULT_SERVER_WAIT_TIMEOUT_MILLIS)
   }
 
   /**
