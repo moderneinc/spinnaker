@@ -146,14 +146,13 @@ class CreateAzureServerGroupWithoutLoadBalancersAtomicOperation implements Atomi
 
         if (healthy) {
           getTask().updateStatus(BASE_PHASE, String.format(
-            "Done enabling Azure server group %s in %s.",
-            description.getName(), description.getRegion()))
+            "Azure server group %s healthy.",
+            description.getName()))
         } else {
           errList.add("Server group did not come up in time")
         }
 
         errList.addAll(AzureDeploymentOperation.checkDeploymentOperationStatus(task, BASE_PHASE, description.credentials, resourceGroupName, deployment.name()))
-        serverGroupName = errList.isEmpty() ? description.name : null
       }
     } catch (Exception e) {
       task.updateStatus(BASE_PHASE, "Unexpected exception: Deployment of server group ${description.name} failed: ${e.message}")

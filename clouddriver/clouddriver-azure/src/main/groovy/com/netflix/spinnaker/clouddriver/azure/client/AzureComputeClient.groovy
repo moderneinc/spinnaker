@@ -241,6 +241,13 @@ public class AzureComputeClient extends AzureBaseClient {
   }
 
   /**
+   * check the scale set's health status using the default timeout
+   */
+  Boolean waitForScaleSetHealthy(String resourceGroupName, String serverGroupName) {
+    return waitForScaleSetHealthy(resourceGroupName, serverGroupName, DEFAULT_SERVER_WAIT_TIMEOUT_MILLIS)
+  }
+
+  /**
    * check the scale set's health status, wait for the timeout return true when healthy, false if we hit the timeout
    */
   Boolean waitForScaleSetHealthy(String resourceGroupName, String serverGroupName, long timeoutMillis) {
