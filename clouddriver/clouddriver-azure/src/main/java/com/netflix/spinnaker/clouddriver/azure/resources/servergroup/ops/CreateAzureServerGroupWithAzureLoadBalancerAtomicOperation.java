@@ -308,23 +308,12 @@ public class CreateAzureServerGroupWithAzureLoadBalancerAtomicOperation
             .enableServerGroupWithLoadBalancer(
                 resourceGroupName, description.getLoadBalancerName(), description.getName());
 
-        Boolean healthy =
-            description
-                .getCredentials()
-                .getComputeClient()
-                .waitForScaleSetHealthy(resourceGroupName, description.getName());
-
-        if (healthy) {
-          getTask()
-              .updateStatus(
-                  BASE_PHASE,
-                  String.format(
-                      "Done enabling Azure server group %s in %s.",
-                      description.getName(), description.getRegion()));
-        } else {
-          errList.add("Server group did not come up in time");
-        }
-
+        getTask()
+            .updateStatus(
+                BASE_PHASE,
+                String.format(
+                    "Done enabling Azure server group %s in %s.",
+                    description.getName(), description.getRegion()));
       } else {
         getTask()
             .updateStatus(
@@ -333,6 +322,8 @@ public class CreateAzureServerGroupWithAzureLoadBalancerAtomicOperation
                     "Azure server group %s in %s is already enabled.",
                     description.getName(), description.getRegion()));
       }
+
+      waitForHealthy(resourceGroupName, description, errList);
 
       getTask()
           .updateStatus(
@@ -357,5 +348,34 @@ public class CreateAzureServerGroupWithAzureLoadBalancerAtomicOperation
         new ArrayList<String>(
             Arrays.asList(description.getRegion() + ":" + description.getName().toString())));
     return map;
+  }
+
+  private void waitForHealthy(
+      String resourceGroupName,
+      AzureServerGroupDescription serverGroupDescription,
+      List<String> errList) {
+    getTask()
+        .updateStatus(
+            BASE_PHASE,
+            "Waiting for instances in Azure server group "
+                + serverGroupDescription.getName()
+                + " to be healthy...");
+
+    boolean healthy =
+        description
+            .getCredentials()
+            .getComputeClient()
+            .waitForScaleSetHealthy(resourceGroupName, serverGroupDescription.getName());
+
+    if (healthy) {
+      getTask()
+          .updateStatus(
+              BASE_PHASE, "Azure server group " + serverGroupDescription.getName() + " healthy.");
+    } else {
+      errList.add("Server group did not come up in time");
+
+      throw new AtomicOperationException(
+          String.format("%s deployment failed", description.getName()), errList);
+    }
   }
 }
