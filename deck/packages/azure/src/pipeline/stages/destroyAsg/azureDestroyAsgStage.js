@@ -45,13 +45,6 @@ module(AZURE_PIPELINE_STAGES_DESTROYASG_AZUREDESTROYASGSTAGE, [])
         $scope.state.accounts = true;
       });
 
-      ctrl.accountUpdated = function () {
-        AccountService.getAccountDetails(stage.credentials).then(function (details) {
-          stage.regions = [details.org];
-          //        stage.regions = ['eastus', 'westus'];
-        });
-      };
-
       $scope.targets = StageConstants.TARGET_LIST;
 
       stage.regions = stage.regions || [];
@@ -62,10 +55,10 @@ module(AZURE_PIPELINE_STAGES_DESTROYASG_AZUREDESTROYASGSTAGE, [])
       if (!stage.credentials && $scope.application.defaultCredentials.azure) {
         stage.credentials = $scope.application.defaultCredentials.azure;
       }
-
-      if (stage.credentials) {
-        ctrl.accountUpdated();
+      if (!stage.regions.length && $scope.application.defaultRegions.azure) {
+        stage.regions.push($scope.application.defaultRegions.azure);
       }
+
       if (!stage.target) {
         stage.target = $scope.targets[0].val;
       }
