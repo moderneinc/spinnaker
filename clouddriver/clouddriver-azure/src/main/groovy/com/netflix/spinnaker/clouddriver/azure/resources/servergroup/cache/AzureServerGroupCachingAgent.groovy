@@ -103,21 +103,6 @@ class AzureServerGroupCachingAgent extends AzureCachingAgent {
   }
 
   CacheResult removeDeadCacheEntries(CacheResult cacheResult, ProviderCache providerCache) {
-    // Server Groups
-    def sgIdentifiers = providerCache.filterIdentifiers(AZURE_SERVER_GROUPS.ns, Keys.getServerGroupKey(AzureCloudProvider.ID, "*", region, accountName))
-    def sgCacheResults = providerCache.getAll((AZURE_SERVER_GROUPS.ns), sgIdentifiers, RelationshipCacheFilter.none())
-    def evictedSGList = sgCacheResults.collect{ cached ->
-      if (!cacheResult.cacheResults[AZURE_SERVER_GROUPS.ns].find {it.id == cached.id}) {
-        cached.id
-      } else {
-        null
-      }
-    }
-    evictedSGList.removeAll(Collections.singleton(null))
-    if (evictedSGList) {
-      cacheResult.evictions[AZURE_SERVER_GROUPS.ns] = evictedSGList
-    }
-
     // Instances
     def instanceIdentifiers = providerCache.filterIdentifiers(AZURE_INSTANCES.ns, Keys.getInstanceKey(AzureCloudProvider.ID, "*", "*", region, accountName))
     def instanceCacheResults = providerCache.getAll((AZURE_INSTANCES.ns), instanceIdentifiers, RelationshipCacheFilter.none())
