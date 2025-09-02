@@ -282,7 +282,7 @@ class AzureServerGroupResourceTemplateSpec extends Specification {
     description.osConfig = config
 
     int backendPort = withCustomImage ? 22 : 3389
-    description.addInboundPortConfig("InboundPortConfig", 50000, 50099, "tcp", backendPort)
+    description.addInboundPortConfig("InboundPortConfig", 51000, 51099, "tcp", backendPort)
 
     description.loadBalancerName = 'load-balancer-name'
     description.loadBalancerType = AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()
