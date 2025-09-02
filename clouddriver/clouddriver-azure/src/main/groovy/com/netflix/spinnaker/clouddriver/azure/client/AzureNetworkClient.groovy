@@ -47,7 +47,7 @@ import java.lang.reflect.Method
 @CompileStatic
 @Slf4j
 class AzureNetworkClient extends AzureBaseClient {
-  private final Integer NAT_POOL_PORT_START = 50000
+  private final Integer NAT_POOL_PORT_START = 51000
   private final Integer NAT_POOL_PORT_END = 59999
   private final Integer NAT_POOL_PORT_NUMBER_PER_POOL = 100
 
