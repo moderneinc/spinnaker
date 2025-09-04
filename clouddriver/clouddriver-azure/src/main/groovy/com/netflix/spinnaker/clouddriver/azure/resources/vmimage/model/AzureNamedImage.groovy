@@ -27,4 +27,5 @@ class AzureNamedImage {
   String region
   String uri
   String ostype
+  Map<String, String> tags
 }

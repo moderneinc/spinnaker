@@ -16,12 +16,16 @@
 
 package com.netflix.spinnaker.clouddriver.azure.resources.vmimage.model;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class AzureManagedVMImage {
 
   private String name;
   private String resourceGroup;
   private String region;
   private String osType;
+  private Map<String, String> tags;
 
   public String getName() {
     return name;
@@ -53,5 +57,13 @@ public class AzureManagedVMImage {
 
   public void setOsType(String osType) {
     this.osType = osType;
+  }
+
+  public Map<String, String> getTags() {
+    return tags != null ? tags : new HashMap<>();
+  }
+
+  public void setTags(Map<String, String> tags) {
+    this.tags = tags;
   }
 }
