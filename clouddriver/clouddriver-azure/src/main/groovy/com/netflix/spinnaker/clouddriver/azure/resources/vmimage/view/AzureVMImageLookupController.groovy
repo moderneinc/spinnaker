@@ -35,6 +35,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestMethod
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 
@@ -137,8 +138,16 @@ class AzureVMImageLookupController {
   }
 
   @RequestMapping(value = '/find', method = RequestMethod.GET)
-  List<AzureNamedImage> list(LookupOptions lookupOptions) {
+  List<AzureNamedImage> list(LookupOptions lookupOptions, @RequestParam Map<String, String> allParams) {
     def result = new ArrayList<AzureNamedImage>()
+
+    // Extract tag filters from request parameters
+    extractTagFilters(allParams, lookupOptions)
+
+    // If tags are provided, search by tags
+    if (lookupOptions.tags && !lookupOptions.tags.isEmpty()) {
+      return findImagesByTags(lookupOptions)
+    }
 
     // retrieve the list of custom vm images from the SCS specified in the config.yml file and stored in the cache
     result.addAll(
@@ -293,24 +302,93 @@ class AzureVMImageLookupController {
       def parts = Keys.parse(azureCloudProvider, cacheData.id)
 
       if ((vmImage.region == parts.region) && (vmImagePartName == null || vmImage.name.toLowerCase().contains(vmImagePartName.toLowerCase()))) {
-        return new AzureNamedImage(
-          imageName: vmImage.name,
-          isCustom: true,
-          publisher: "na",
-          offer: "na",
-          sku: "na",
-          version: "na",
-          uri: "na",
-          ostype: vmImage.osType,
-          account: parts.account,
-          region: parts.region
-        )
+        return buildAzureNamedImage(vmImage, parts)
       }
     } catch (Exception e) {
       log.error("fromManagedImageCacheData -> Unexpected exception", e)
     }
 
     null
+  }
+
+  List<AzureNamedImage> findImagesByTags(LookupOptions lookupOptions) {
+    def results = [] as List<AzureNamedImage>
+    def pattern = Keys.getManagedVMImageKey(azureCloudProvider,
+      lookupOptions.account ?: '*',
+      lookupOptions.region ?: '*',
+      "*", "*", "*")
+
+    def identifiers = cacheView.filterIdentifiers(Keys.Namespace.AZURE_MANAGEDIMAGES.ns, pattern)
+    def data = cacheView.getAll(Keys.Namespace.AZURE_MANAGEDIMAGES.ns, identifiers, RelationshipCacheFilter.none())
+
+    for (cacheData in data) {
+      try {
+        AzureManagedVMImage vmImage = objectMapper.convertValue(cacheData.attributes['vmimage'], AzureManagedVMImage)
+        def parts = Keys.parse(azureCloudProvider, cacheData.id)
+
+        if (matchesFilters(vmImage, lookupOptions)) {
+          results += buildAzureNamedImage(vmImage, parts)
+
+          if (results.size() >= MAX_SEARCH_RESULTS) {
+            break
+          }
+        }
+      } catch (Exception e) {
+        log.error("findImagesByTags -> Unexpected exception", e)
+      }
+    }
+
+    results
+  }
+
+  private boolean matchesFilters(AzureManagedVMImage vmImage, LookupOptions lookupOptions) {
+    // Check tags match
+    if (lookupOptions.tags && !lookupOptions.tags.isEmpty()) {
+      if (!vmImage.tags) return false
+      for (entry in lookupOptions.tags.entrySet()) {
+        if (vmImage.tags.get(entry.key) != entry.value) {
+          return false
+        }
+      }
+    }
+
+    // Check package name match
+    if (lookupOptions.q && !lookupOptions.q.isEmpty()) {
+      return vmImage.name.toLowerCase().contains(lookupOptions.q.toLowerCase())
+    }
+
+    return true
+  }
+
+  private AzureNamedImage buildAzureNamedImage(AzureManagedVMImage vmImage, def parts) {
+    def credentials = accountCredentialsProvider.getCredentials(parts.account) as AzureNamedAccountCredentials
+    def subscriptionId = credentials.credentials.subscriptionId
+    def resourceGroup = vmImage.resourceGroup
+
+    def imageUri = "/subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}/providers/Microsoft.Compute/images/${vmImage.name}"
+
+    return new AzureNamedImage(
+      imageName: vmImage.name,
+      isCustom: true,
+      publisher: "na",
+      offer: "na",
+      sku: "na",
+      version: "na",
+      uri: imageUri,
+      ostype: vmImage.osType,
+      account: parts.account,
+      region: parts.region,
+      tags: vmImage.tags
+    )
+  }
+
+  private void extractTagFilters(Map<String, String> allParams, LookupOptions lookupOptions) {
+    def tagFilters = allParams.findAll { it.key.startsWith("tag:") }
+                              .collectEntries { [(it.key.substring(4)): it.value] }
+
+    if (!tagFilters.isEmpty()) {
+      lookupOptions.tags = tagFilters
+    }
   }
 
   @ResponseStatus(value = HttpStatus.NOT_FOUND, reason = 'Image not found')
@@ -324,5 +402,6 @@ class AzureVMImageLookupController {
     Boolean configOnly = true
     Boolean customOnly = false
     Boolean managedImages = false
+    Map<String, String> tags
   }
 }

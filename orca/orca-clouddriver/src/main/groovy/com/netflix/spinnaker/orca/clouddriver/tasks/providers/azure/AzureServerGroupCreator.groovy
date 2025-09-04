@@ -39,13 +39,40 @@ class AzureServerGroupCreator implements ServerGroupCreator, DeploymentDetailsAw
       operation.credentials = operation.account
     }
 
-    def bakeStage = getPreviousStageWithImage(stage, operation.region, cloudProvider)
+    if (operation.image?.imageName || operation.image?.uri) {
+      // Image already populated, nothing to do
+      log.info("Using existing image configuration: ${operation.image.imageName}")
+    } else {
+      // Get the previous stage with image using existing method
+      def imageStage = getPreviousStageWithImage(stage, operation.region ?: stage.context.region, cloudProvider)
 
-    if (bakeStage) {
-      operation.image.isCustom = true
-      operation.image.uri = bakeStage.context?.imageId
-      operation.image.ostype = bakeStage.context?.osType
-      operation.image.imageName = bakeStage.context?.imageName
+      if (imageStage) {
+        // Check the type of stage and handle accordingly
+        if (imageStage.type == "findImageFromTags" && imageStage.context?.amiDetails) {
+          // Use the image from Find Image from Tags stage
+          def imageDetails = imageStage.context.amiDetails[0]
+          operation.image = operation.image ?: [:]
+          operation.image.isCustom = true
+          operation.image.uri = imageDetails.imageId
+          operation.image.imageName = imageDetails.imageName
+          operation.image.region = imageDetails.region ?: operation.region
+          operation.image.ostype = imageDetails.osType ?: "linux"
+          // Clear marketplace fields for custom images
+          operation.image.publisher = ""
+          operation.image.offer = ""
+          operation.image.sku = ""
+          operation.image.version = ""
+          log.info("Using image from Find Image from Tags stage: ${operation.image.imageName}")
+        } else if (imageStage.type == "bake") {
+          // Use the image from bake stage
+          operation.image = operation.image ?: [:]
+          operation.image.isCustom = true
+          operation.image.uri = imageStage.context?.imageId
+          operation.image.ostype = imageStage.context?.osType
+          operation.image.imageName = imageStage.context?.imageName
+          log.info("Using image from bake stage: ${operation.image.imageName}")
+        }
+      }
     }
 
     return [[(ServerGroupCreator.OPERATION): operation]]

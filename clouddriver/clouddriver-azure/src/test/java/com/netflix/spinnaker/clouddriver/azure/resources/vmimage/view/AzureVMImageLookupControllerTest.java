@@ -36,6 +36,7 @@ import com.netflix.spinnaker.clouddriver.azure.resources.vmimage.model.AzureName
 import com.netflix.spinnaker.clouddriver.azure.resources.vmimage.model.AzureVMImage;
 import com.netflix.spinnaker.clouddriver.azure.resources.vmimage.view.AzureVMImageLookupController.LookupOptions;
 import com.netflix.spinnaker.clouddriver.security.DefaultAccountCredentialsProvider;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -134,7 +135,7 @@ class AzureVMImageLookupControllerTest {
         .willReturn(List.of(c));
 
     // act
-    List<AzureNamedImage> list = lookupController.list(lookupOptions);
+    List<AzureNamedImage> list = lookupController.list(lookupOptions, new HashMap<>());
 
     // assert
     ArgumentCaptor<String> namespace = ArgumentCaptor.forClass(String.class);
@@ -224,7 +225,7 @@ class AzureVMImageLookupControllerTest {
 
     given(accountCredentialsProvider.getAll()).willReturn(Set.of());
     // act
-    List<AzureNamedImage> list = lookupController.list(lookupOptions);
+    List<AzureNamedImage> list = lookupController.list(lookupOptions, new HashMap<>());
 
     // assert
     ArgumentCaptor<String> namespace = ArgumentCaptor.forClass(String.class);
@@ -291,7 +292,7 @@ class AzureVMImageLookupControllerTest {
 
     given(accountCredentialsProvider.getAll()).willReturn(Set.of());
     // act
-    List<AzureNamedImage> list = lookupController.list(lookupOptions);
+    List<AzureNamedImage> list = lookupController.list(lookupOptions, new HashMap<>());
 
     // assert
     ArgumentCaptor<String> namespace = ArgumentCaptor.forClass(String.class);
@@ -438,7 +439,7 @@ class AzureVMImageLookupControllerTest {
         .willReturn(List.of(c));
 
     // act
-    List<AzureNamedImage> list = lookupController.list(lookupOptions);
+    List<AzureNamedImage> list = lookupController.list(lookupOptions, new HashMap<>());
 
     // assert
     ArgumentCaptor<String> namespace = ArgumentCaptor.forClass(String.class);

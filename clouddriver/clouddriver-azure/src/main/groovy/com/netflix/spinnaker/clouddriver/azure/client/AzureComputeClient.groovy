@@ -75,7 +75,8 @@ public class AzureComputeClient extends AzureBaseClient {
           name: vm.name(),
           resourceGroup: vm.resourceGroupName(),
           region: vm.regionName(),
-          osType: vm.osDiskImage().osType().name())
+          osType: vm.osDiskImage().osType().name(),
+          tags: vm.tags() ?: [:])
       }
 
     } catch (Exception e) {
