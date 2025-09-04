@@ -172,10 +172,6 @@ class CreateAzureServerGroupAtomicOperation implements AtomicOperation<Map> {
       // TODO: Debug only; can be removed as part of tags cleanup
       description.appGatewayBapId = appGatewayPoolID
 
-      // If Linux, set up connection on port 22 (ssh) otherwise use port 3389 (rdp)
-      def backendPort = description.image.ostype.toLowerCase() == "linux" ? 22 : 3389
-      description.addInboundPortConfig(AzureUtilities.INBOUND_NATPOOL_PREFIX + description.name, 51000, 51099, "tcp", backendPort)
-
       Map<String, Object> templateParameters = [:]
 
       templateParameters[AzureServerGroupResourceTemplate.subnetParameterName] = subnetId

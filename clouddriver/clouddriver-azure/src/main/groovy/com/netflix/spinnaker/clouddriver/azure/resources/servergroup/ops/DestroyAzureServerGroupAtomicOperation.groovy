@@ -86,11 +86,6 @@ class DestroyAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
               .networkClient
               .removeLoadBalancerAPforServerGroup(resourceGroupName, serverGroupDescription.loadBalancerName, serverGroupDescription.name)
 
-            task.updateStatus(BASE_PHASE, "Remove NAT pool in $description.loadBalancerName")
-            description
-              .credentials
-              .networkClient
-              .removeLoadBalancerNatPoolPortRangeforServerGroup(resourceGroupName, serverGroupDescription.loadBalancerName, serverGroupDescription.name)
           } else if (serverGroupDescription.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()) {
             // Remove association between server group and the assigned application gateway backend address pool
             task.updateStatus(BASE_PHASE, "Remove backend address pool in $description.appGatewayName")

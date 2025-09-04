@@ -24,11 +24,9 @@ import com.azure.resourcemanager.compute.models.VirtualMachineScaleSet
 import com.azure.resourcemanager.compute.models.VirtualMachineScaleSetVMs
 import com.azure.resourcemanager.network.fluent.models.NetworkSecurityGroupInner
 import com.azure.resourcemanager.network.models.LoadBalancer
-import com.azure.resourcemanager.network.models.LoadBalancerInboundNatPool
 import com.azure.resourcemanager.network.models.LoadBalancingRule
 import com.azure.resourcemanager.network.models.Network
 import com.azure.resourcemanager.network.models.PublicIpAddress
-import com.azure.resourcemanager.network.models.TransportProtocol
 import com.netflix.frigga.Names
 import com.netflix.spinnaker.clouddriver.azure.common.AzureUtilities
 import com.netflix.spinnaker.clouddriver.azure.resources.appgateway.model.AzureAppGatewayDescription
@@ -47,10 +45,6 @@ import java.lang.reflect.Method
 @CompileStatic
 @Slf4j
 class AzureNetworkClient extends AzureBaseClient {
-  private final Integer NAT_POOL_PORT_START = 51000
-  private final Integer NAT_POOL_PORT_END = 59999
-  private final Integer NAT_POOL_PORT_NUMBER_PER_POOL = 100
-
   AzureNetworkClient(String subscriptionId, TokenCredential credentials, AzureProfile azureProfile) {
     super(subscriptionId, azureProfile, credentials)
   }
@@ -419,89 +413,6 @@ class AzureNetworkClient extends AzureBaseClient {
     null
   }
 
-  /**
-   * It creates the server group corresponding nat pool entry in the selected load balancer
-   *  This will be later used as a parameter in the create server group deployment template
-   * @param resourceGroupName the name of the resource group to look into
-   * @param loadBalancerName the of the application gateway
-   * @param serverGroupName the of the application gateway
-   * @return a resource id for the nat pool that got created or null/Runtime Exception if something went wrong
-   */
-  String createLoadBalancerNatPoolPortRangeforServerGroup(String resourceGroupName, String loadBalancerName, String serverGroupName) {
-    def loadBalancer = executeOp({
-      azure.loadBalancers().getByResourceGroup(resourceGroupName, loadBalancerName)
-    })
-
-    if (loadBalancer) {
-      // Fetch the front end name, which will be used in NAT pool. If no front end configured, return null
-      Set<String> frontEndSet = loadBalancer.frontends().keySet()
-      if(frontEndSet.size() == 0) {
-        return null
-      }
-      String frontEndName = frontEndSet.iterator().next()
-      // the application gateway must have an backend address pool list (even if it might be empty)
-      List<int[]> usedPortList = new ArrayList<>()
-      for(LoadBalancerInboundNatPool pool : loadBalancer.inboundNatPools().values()) {
-        int[] range = new int[2]
-        range[0] = pool.frontendPortRangeStart()
-        range[1] = pool.frontendPortRangeEnd()
-        usedPortList.add(range)
-      }
-      usedPortList.sort(true, new Comparator<int[]>() {
-        @Override
-        int compare(int[] o1, int[] o2) {
-          return o1[0] - o2[0]
-        }
-      })
-
-      if (loadBalancer.inboundNatPools()?.containsKey(serverGroupName)) {
-        return loadBalancer.inboundNatPools().get(serverGroupName).innerModel().id()
-      }
-      int portStart = findUnusedPortsRange(usedPortList, NAT_POOL_PORT_START, NAT_POOL_PORT_END, NAT_POOL_PORT_NUMBER_PER_POOL)
-      if(portStart == -1) {
-        throw new RuntimeException("Load balancer ${loadBalancerName} does not have unused port between ${NAT_POOL_PORT_START} and ${NAT_POOL_PORT_END} with length ${NAT_POOL_PORT_NUMBER_PER_POOL}")
-      }
-
-      // The purpose of the following code is to create an NAT pool in an existing Azure Load Balancer
-      // However Azure Java SDK doesn't provide a way to do this
-      // Use reflection to modify the backend of load balancer
-      LoadBalancerInboundNatPool.UpdateDefinitionStages.WithAttach< LoadBalancer.Update> update = loadBalancer.update()
-        .defineInboundNatPool(serverGroupName)
-        .withProtocol(TransportProtocol.TCP)
-
-      try {
-        Method setRangeMethod = update.getClass().getMethod("fromFrontendPortRange", int.class, int.class)
-        setRangeMethod.setAccessible(true)
-        setRangeMethod.invoke(update, portStart, portStart + NAT_POOL_PORT_NUMBER_PER_POOL - 1)
-
-        Method setBackendPortMethod = update.getClass().getMethod("fromFrontend", String.class)
-        setBackendPortMethod.setAccessible(true)
-        setBackendPortMethod.invoke(update, frontEndName)
-
-        Method setFrontendMethod = update.getClass().getMethod("toBackendPort", int.class)
-        setFrontendMethod.setAccessible(true)
-        setFrontendMethod.invoke(update, 22)
-      } catch (NoSuchMethodException e) {
-        log.error("Failed to use reflection to create NAT pool in Load Balancer, detail: {}", e.getMessage())
-        return null
-      } catch (IllegalAccessException e) {
-        log.error("Failed to use reflection to create NAT pool in Load Balancer, detail: {}", e.getMessage())
-        return null
-      } catch (InvocationTargetException e) {
-        log.error("Failed to use reflection to create NAT pool in Load Balancer, detail: {}", e.getMessage())
-        return null
-      }
-
-      update.attach().apply()
-      return loadBalancer.inboundNatPools().get(serverGroupName).innerModel().id()
-
-    } else {
-      throw new RuntimeException("Load balancer ${loadBalancerName} not found in resource group ${resourceGroupName}")
-    }
-
-    null
-  }
-
   // Find unused port range. The usedList is the type List<int[]> whose element is int[2]{portStart, portEnd}
   // The usedList needs to be sorted in asc order for the element[0]
   private int findUnusedPortsRange(List<int[]> usedList, int start, int end, int targetLength) {
@@ -515,36 +426,6 @@ class AzureNetworkClient extends AzureBaseClient {
       if (retEnd > end) return -1
     }
     return ret
-  }
-
-  /**
-   * It removes the server group corresponding nat pool entry in the selected load balancer
-   *  This will be later used as a parameter in the create server group deployment template
-   * @param resourceGroupName the name of the resource group to look into
-   * @param loadBalancerName the of the application gateway
-   * @param serverGroupName the of the application gateway
-   * @return a resource id for the nat pool that got created or null/Runtime Exception if something went wrong
-   */
-  String removeLoadBalancerNatPoolPortRangeforServerGroup(String resourceGroupName, String loadBalancerName, String serverGroupName) {
-    def loadBalancer = executeOp({
-      azure.loadBalancers().getByResourceGroup(resourceGroupName, loadBalancerName)
-    })
-
-    String id
-    if (loadBalancer) {
-      if (loadBalancer.inboundNatPools()?.containsKey(serverGroupName)) {
-        id = loadBalancer.inboundNatPools().get(serverGroupName).innerModel().id()
-
-        loadBalancer.update()
-          .withoutInboundNatPool(serverGroupName)
-          .apply()
-
-      } else {
-        throw new RuntimeException("Load balancer nat pool ${serverGroupName} not found in load balancer ${loadBalancerName}")
-      }
-    }
-
-    id
   }
 
   /**

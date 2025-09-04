@@ -71,7 +71,6 @@ public class CreateAzureServerGroupWithAzureLoadBalancerAtomicOperation
     String resourceGroupName = null;
     String virtualNetworkName = null;
     String loadBalancerPoolID = null;
-    String inboundNatPoolID = null;
     String subnetId = null;
 
     try {
@@ -195,27 +194,6 @@ public class CreateAzureServerGroupWithAzureLoadBalancerAtomicOperation
                 "Selected Load Balancer %s does not exist", description.getLoadBalancerName()));
       }
 
-      // Create new inbound NAT pool for the server group
-      getTask()
-          .updateStatus(
-              BASE_PHASE,
-              String.format("Create new inbound NAT pool in Load Balancer: %s", loadBalancerName));
-      inboundNatPoolID =
-          description
-              .getCredentials()
-              .getNetworkClient()
-              .createLoadBalancerNatPoolPortRangeforServerGroup(
-                  resourceGroupName, description.getLoadBalancerName(), description.getName());
-
-      if (inboundNatPoolID == null) {
-        getTask()
-            .updateStatus(
-                BASE_PHASE,
-                String.format(
-                    "Failed to create new inbound NAT pool in Load Balancer: %s, the task will continue",
-                    loadBalancerName));
-      }
-
       Map<String, Object> templateParameters = new HashMap<>();
 
       templateParameters.put(AzureServerGroupResourceTemplate.getSubnetParameterName(), subnetId);
@@ -252,8 +230,6 @@ public class CreateAzureServerGroupWithAzureLoadBalancerAtomicOperation
       templateParameters.put(
           AzureServerGroupResourceTemplate.getLoadBalancerAddressPoolParameterName(),
           loadBalancerPoolID);
-      templateParameters.put(
-          AzureServerGroupResourceTemplate.getLoadBalancerNatPoolParameterName(), inboundNatPoolID);
 
       // The empty "" cannot be assigned to the custom data otherwise Azure service will run into
       // error complaining "custom data must be in Base64".

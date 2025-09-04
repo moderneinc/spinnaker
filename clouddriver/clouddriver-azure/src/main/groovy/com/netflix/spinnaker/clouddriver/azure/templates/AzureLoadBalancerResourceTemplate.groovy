@@ -65,7 +65,7 @@ class AzureLoadBalancerResourceTemplate {
   }
 
   static class LoadBalancerTemplateVariables{
-    String apiVersion = "2018-08-01"
+    String apiVersion = "2023-04-01"
     String loadBalancerName
     String virtualNetworkName
     String publicIPAddressName
