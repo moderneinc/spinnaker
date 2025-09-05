@@ -110,7 +110,7 @@ class AzureServerGroupResourceTemplate {
   interface TemplateVariables {}
 
   static class CoreServerGroupTemplateVariables implements TemplateVariables {
-    final String apiVersion = "2019-03-01"
+    final String apiVersion = "2023-03-01"
     String publicIPAddressName = ""
     String publicIPAddressID = ""
     String publicIPAddressType = ""
@@ -120,7 +120,6 @@ class AzureServerGroupResourceTemplate {
     String loadBalancerName = ""
     String loadBalancerID = ""
     String frontEndIPConfigID = ""
-    String inboundNatPoolName = ""
 
     CoreServerGroupTemplateVariables() {}
 
@@ -135,7 +134,6 @@ class AzureServerGroupResourceTemplate {
         loadBalancerBackend = AzureUtilities.LBBACKEND_NAME_PREFIX + description.name
         loadBalancerName = LB_NAME
         loadBalancerID = "[resourceId('Microsoft.Network/loadBalancers', variables('loadBalancerName'))]"
-        inboundNatPoolName = AzureUtilities.INBOUND_NATPOOL_PREFIX + description.name
       }
     }
   }
@@ -190,7 +188,6 @@ class AzureServerGroupResourceTemplate {
     VMPasswordParameter vmPassword = new VMPasswordParameter(["description": "Admin password on all VMs"], "")
     VMSshPublicKeyParameter vmSshPublicKey = new VMSshPublicKeyParameter(["description": "SSH public key on all VMs"], "")
     LoadBalancerPoolParameter loadBalancerAddressPoolId = new LoadBalancerPoolParameter(["description": "Load balancer pool ID"], "")
-    LoadBalancerNatPoolParameter loadBalancerNatPoolId = new LoadBalancerNatPoolParameter(["description": "Load balancer NAT pool ID"], "")
 
     // The default value of custom data cannot be "" otherwise Azure service will run into error complaining "custom data must be in Base64".
     CustomDataParameter customData = new CustomDataParameter(["description":"custom data to pass down to the virtual machine(s)"], "sample custom data")
@@ -221,13 +218,6 @@ class AzureServerGroupResourceTemplate {
   static String loadBalancerAddressPoolParameterName = "loadBalancerAddressPoolId"
   static class LoadBalancerPoolParameter extends StringParameterWithDefault {
     LoadBalancerPoolParameter(Map<String, String> metadata, String defaultValue) {
-      super(metadata, defaultValue)
-    }
-  }
-
-  static String loadBalancerNatPoolParameterName = "loadBalancerNatPoolId"
-  static class LoadBalancerNatPoolParameter extends StringParameterWithDefault {
-    LoadBalancerNatPoolParameter(Map<String, String> metadata, String defaultValue) {
       super(metadata, defaultValue)
     }
   }
@@ -648,7 +638,6 @@ class AzureServerGroupResourceTemplate {
     NetworkInterfaceIPConfigurationSubnet subnet
     ArrayList<AppGatewayBackendAddressPool> ApplicationGatewayBackendAddressPools = []
     ArrayList<LoadBalancerBackendAddressPool> loadBalancerBackendAddressPools = []
-    ArrayList<LoadBalancerInboundNatPoolId> loadBalancerInboundNatPools = []
 
     /**
      *
@@ -658,12 +647,10 @@ class AzureServerGroupResourceTemplate {
       if(description.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_LOAD_BALANCER.toString()) {
         subnet = new NetworkInterfaceIPConfigurationSubnet()
         loadBalancerBackendAddressPools.add(new ExistLoadBalancerBackendAddressPool())
-        loadBalancerInboundNatPools.add(new ExistLoadBalancerInboundNatPoolId())
       } else if (description.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()) {
         subnet = new NetworkInterfaceIPConfigurationSubnet()
         if(description.enableInboundNAT) {
           loadBalancerBackendAddressPools.add(new LoadBalancerBackendAddressPool())
-          loadBalancerInboundNatPools.add(new LoadBalancerInboundNatPoolId())
         }
         ApplicationGatewayBackendAddressPools.add(new AppGatewayBackendAddressPool())
       } else if (description.loadBalancerType == null) {
@@ -693,23 +680,11 @@ class AzureServerGroupResourceTemplate {
     }
   }
 
-  static class LoadBalancerInboundNatPoolId extends IdRef {
-    LoadBalancerInboundNatPoolId() {
-      id = "[resourceId('Microsoft.Network/loadBalancers/inboundNatPools', variables('loadBalancerName'), variables('inboundNatPoolName'))]"
-    }
-  }
-
   static class ExistLoadBalancerBackendAddressPool {
     String id
 
     ExistLoadBalancerBackendAddressPool() {
       id = "[parameters('${loadBalancerAddressPoolParameterName}')]"
-    }
-  }
-
-  static class ExistLoadBalancerInboundNatPoolId extends IdRef {
-    ExistLoadBalancerInboundNatPoolId() {
-      id = "[parameters('${loadBalancerNatPoolParameterName}')]"
     }
   }
 
@@ -984,14 +959,10 @@ class AzureServerGroupResourceTemplate {
   static class LoadBalancerProperties {
     ArrayList<FrontEndIpConfiguration> frontendIPConfigurations = []
     ArrayList<BackEndAddressPool> backendAddressPools = []
-    ArrayList<InboundNatPool> inboundNatPools = []
 
     LoadBalancerProperties(AzureServerGroupDescription description) {
       frontendIPConfigurations.add(new FrontEndIpConfiguration())
       backendAddressPools.add(new BackEndAddressPool())
-      description.inboundPortConfigs?.each {
-        inboundNatPools.add(new InboundNatPool(it))
-      }
     }
   }
 
@@ -1018,33 +989,6 @@ class AzureServerGroupResourceTemplate {
 
     BackEndAddressPool() {
       name = "[variables('loadBalancerBackEnd')]"
-    }
-  }
-
-
-  static class InboundNatPool {
-    String name
-    InboundNatPoolProperties properties
-
-    InboundNatPool(AzureInboundPortConfig inboundPortConfig) {
-      name = inboundPortConfig.name
-      properties = new InboundNatPoolProperties(inboundPortConfig)
-    }
-  }
-
-  static class InboundNatPoolProperties {
-    IdRef frontendIPConfiguration
-    String protocol
-    int frontendPortRangeStart
-    int frontendPortRangeEnd
-    int backendPort
-
-    InboundNatPoolProperties(AzureInboundPortConfig inboundPortConfig) {
-      frontendIPConfiguration = new IdRef("[variables('frontEndIPConfigID')]")
-      protocol = inboundPortConfig.protocol
-      frontendPortRangeStart = inboundPortConfig.frontEndPortRangeStart
-      frontendPortRangeEnd = inboundPortConfig.frontEndPortRangeEnd
-      backendPort = inboundPortConfig.backendPort
     }
   }
 }
