@@ -109,6 +109,7 @@ module(AZURE_SERVERGROUP_SERVERGROUP_TRANSFORMER, []).factory('azureServerGroupT
       zonesEnabled: command.zonesEnabled,
       zones: command.zonesEnabled ? command.zones : [],
       enableInboundNAT: command.enableInboundNAT,
+      bootDiagnosticsStorageUri: command.bootDiagnosticsStorageUri || '',
     };
 
     if (command.image == null || command.image.isCustom == false) {

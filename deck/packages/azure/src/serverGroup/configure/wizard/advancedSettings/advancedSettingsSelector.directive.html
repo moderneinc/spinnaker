@@ -24,6 +24,23 @@
       </div>
     </div>
     <div class="form-group">
+      <div class="col-xs-4 sm-label-right">
+        <b>Boot Diagnostics Storage URI</b>
+        <help-field key="azure.serverGroup.bootDiagnosticsStorageUri"></help-field>
+      </div>
+      <div class="col-md-7">
+        <input
+          type="text"
+          class="form-control input-sm"
+          ng-model="adv.command.bootDiagnosticsStorageUri"
+          placeholder="https://storageaccount.blob.core.windows.net/"
+        />
+        <small class="text-muted"
+          >Leave empty to disable boot diagnostics. Storage account must be in the same region.</small
+        >
+      </div>
+    </div>
+    <div class="form-group">
       <div class="col-md-4 sm-label-right">
         <b>Custom Script</b>
         <help-field key="azure.serverGroup.scriptLocation"></help-field>

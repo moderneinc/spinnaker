@@ -79,6 +79,7 @@ class AzureServerGroupDescription extends AzureResourceOpsDescription implements
   Boolean useSystemManagedIdentity = false
   String userAssignedIdentities
   Boolean enableIpForwarding = false
+  String bootDiagnosticsStorageUri
 
   static class AzureScaleSetSku {
     String name
