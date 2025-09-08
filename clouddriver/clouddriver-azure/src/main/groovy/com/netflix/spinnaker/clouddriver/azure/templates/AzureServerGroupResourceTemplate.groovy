@@ -38,7 +38,6 @@ import com.fasterxml.jackson.databind.SerializationFeature
 import com.netflix.spinnaker.clouddriver.azure.common.AzureUtilities
 import com.netflix.spinnaker.clouddriver.azure.resources.loadbalancer.model.AzureLoadBalancer
 import com.netflix.spinnaker.clouddriver.azure.resources.servergroup.model.AzureServerGroupDescription
-import com.netflix.spinnaker.clouddriver.azure.resources.servergroup.model.AzureServerGroupDescription.AzureInboundPortConfig
 import groovy.util.logging.Slf4j
 
 @Slf4j
@@ -191,6 +190,9 @@ class AzureServerGroupResourceTemplate {
 
     // The default value of custom data cannot be "" otherwise Azure service will run into error complaining "custom data must be in Base64".
     CustomDataParameter customData = new CustomDataParameter(["description":"custom data to pass down to the virtual machine(s)"], "sample custom data")
+
+    // Boot diagnostics storage account URI - optional
+    BootDiagnosticsStorageUriParameter bootDiagnosticsStorageUri = new BootDiagnosticsStorageUriParameter(["description": "Storage account URI for boot diagnostics"], "")
   }
 
   /* Server Group Parameters */
@@ -225,6 +227,13 @@ class AzureServerGroupResourceTemplate {
   static String customDataParameterName = "customData"
   static class CustomDataParameter extends StringParameterWithDefault {
     CustomDataParameter(Map<String, String> metadata, String defValue) {
+      super(metadata, defValue)
+    }
+  }
+
+  static String bootDiagnosticsStorageUriParameterName = "bootDiagnosticsStorageUri"
+  static class BootDiagnosticsStorageUriParameter extends StringParameterWithDefault {
+    BootDiagnosticsStorageUriParameter(Map<String, String> metadata, String defValue) {
       super(metadata, defValue)
     }
   }
@@ -449,6 +458,30 @@ class AzureServerGroupResourceTemplate {
     TerminateNotificationProfile(AzureServerGroupDescription description) {
       enable = true
       notBeforeTimeout = "PT" + description.terminationNotBeforeTimeoutInMinutes + "M"
+    }
+  }
+
+  // Diagnostics Profile for Boot Diagnostics
+  static class DiagnosticsProfile {
+    BootDiagnostics bootDiagnostics
+
+    DiagnosticsProfile(AzureServerGroupDescription description) {
+      bootDiagnostics = new BootDiagnostics(description)
+    }
+  }
+
+  static class BootDiagnostics {
+    Boolean enabled  // Can be Boolean or String (ARM expression)
+    String storageUri
+
+    BootDiagnostics(AzureServerGroupDescription description) {
+      if (description.image.isCustom) {
+        enabled = true
+        storageUri = description.bootDiagnosticsStorageUri
+      } else {
+        enabled = false
+        storageUri = null
+      }
     }
   }
 
@@ -706,6 +739,7 @@ class AzureServerGroupResourceTemplate {
     ScaleSetOsProfile osProfile
     ScaleSetNetworkProfileProperty networkProfile
     ScheduledEventsProfile scheduledEventsProfile
+    DiagnosticsProfile diagnosticsProfile
 
     ScaleSetVMProfileProperty(AzureServerGroupDescription description) {
       storageProfile = description.image.isCustom ?
@@ -727,6 +761,9 @@ class AzureServerGroupResourceTemplate {
       }
 
       networkProfile = new ScaleSetNetworkProfileProperty(description)
+
+      // Enable boot diagnostics
+      diagnosticsProfile = new DiagnosticsProfile(description)
     }
   }
 

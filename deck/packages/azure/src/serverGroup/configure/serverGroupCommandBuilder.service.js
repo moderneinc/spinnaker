@@ -56,6 +56,7 @@ angular
               securityGroupsConfigured: false,
             },
             enableInboundNAT: false,
+            bootDiagnosticsStorageUri: '',
           };
         });
       }
@@ -120,6 +121,7 @@ angular
             disableStrategySelection: true,
           },
           enableInboundNAT: serverGroup.enableInboundNAT,
+          bootDiagnosticsStorageUri: serverGroup.bootDiagnosticsStorageUri || '',
         };
 
         if (typeof serverGroup.customScriptsSettings !== 'undefined') {

@@ -200,6 +200,11 @@ class CreateAzureServerGroupAtomicOperation implements AtomicOperation<Map> {
         templateParameters[AzureServerGroupResourceTemplate.customDataParameterName] = description.osConfig.customData
       }
 
+      // Add boot diagnostics storage URI if provided
+      if(description.bootDiagnosticsStorageUri){
+        templateParameters[AzureServerGroupResourceTemplate.bootDiagnosticsStorageUriParameterName] = description.bootDiagnosticsStorageUri
+      }
+
       if (errList.isEmpty()) {
         description.subnetId = subnetId
         task.updateStatus(BASE_PHASE, "Deploying server group")
