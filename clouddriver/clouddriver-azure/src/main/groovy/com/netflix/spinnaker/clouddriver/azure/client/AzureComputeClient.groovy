@@ -305,6 +305,65 @@ public class AzureComputeClient extends AzureBaseClient {
     String name
   }
 
+  /**
+   * Update tags on a custom VM image
+   * @param imageId - The resource ID of the image (optional)
+   * @param imageName - The name of the image (optional)
+   * @param resourceGroup - The resource group containing the image (optional)
+   * @param tags - The tags to apply to the image
+   * @return true if successful, false otherwise
+   */
+  boolean updateCustomImageTags(String imageId, String imageName, String resourceGroup, Map<String, String> tags) {
+    try {
+      VirtualMachineCustomImage customImage = null
+
+      if (imageId) {
+        customImage = executeOp({
+          azure.virtualMachineCustomImages().getById(imageId)
+        })
+      }
+
+      if (!customImage && resourceGroup && imageName) {
+        customImage = executeOp({
+          azure.virtualMachineCustomImages().getByResourceGroup(resourceGroup, imageName)
+        })
+      }
+
+      if (!customImage && imageName) {
+        def allImages = executeOp({
+          azure.virtualMachineCustomImages().list().asList()
+        })
+        customImage = allImages?.find { it.name() == imageName }
+      }
+
+      if (!customImage) {
+        log.warn("Custom image not found - imageId: ${imageId}, imageName: ${imageName}")
+        return false
+      }
+
+      // Update tags
+      def currentTags = customImage.tags() ?: [:]
+      def newTags = [:] as Map<String, String>
+      newTags.putAll(currentTags)
+      newTags.putAll(tags)
+
+      // Use executeOp to properly handle the update
+      executeOp({
+        azure.genericResources().getById(customImage.id())
+          .update()
+          .withTags(newTags)
+          .apply()
+      })
+
+      log.info("Successfully updated tags for image ${customImage.name()}")
+      return true
+
+    } catch (Exception e) {
+      log.error("Failed to update custom image tags", e)
+      return false
+    }
+  }
+
   /***
    * The namespace for the Azure Resource Provider
    * @return namespace of the resource provider
