@@ -98,9 +98,6 @@ public class AzureImageTagger extends ImageTagger {
   protected boolean areImagesTagged(
       Collection<Image> targetImages, Collection<String> consideredStages, StageExecution stage) {
 
-    // returning true for now as appears force cache refresh is not working for images
-    // this can cause the pipeline to wait while the cache updates on its own schedule
-    /*
     for (Image targetImage : targetImages) {
       Map<String, String> additionalFilters = new HashMap<>();
       additionalFilters.put("managedImages", "true");
@@ -130,7 +127,6 @@ public class AzureImageTagger extends ImageTagger {
         }
       }
     }
-    */
 
     return true;
   }
