@@ -29,6 +29,7 @@ const helpContents: { [key: string]: string } = {
     'The location of custom scripts separated by comma or semicolon to be downloaded on to each instance. A single script should be like: fileUri. Multiple scripts should be like fileUri1,fileUri2 or fileUri1;fileUri2',
   'azure.serverGroup.commandToExecute':
     'Command(s) to execute custom scripts provided during provisioning of an instance.',
+  'azure.serverGroup.bootDiagnosticsStorageUri': 'The URI of a storage account to hold the boot diagnostics.',
   'azure.serverGroup.customData': 'Script or metadata to be injected into each instances.',
   'azure.serverGroup.customTags': `Custom tags on Virtual Machine Scale Set. Allow ${Utility.TAG_LIMITATION} tags at most.`,
   'azure.serverGroup.enableInboundNAT':

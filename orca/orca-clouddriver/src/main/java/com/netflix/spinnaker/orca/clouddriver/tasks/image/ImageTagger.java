@@ -22,11 +22,11 @@ import static java.util.stream.Collectors.toList;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.annotations.VisibleForTesting;
 import com.netflix.spinnaker.orca.api.pipeline.models.StageExecution;
 import com.netflix.spinnaker.orca.clouddriver.OortService;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -82,8 +82,13 @@ public abstract class ImageTagger {
 
       for (String upstreamImageId : upstreamImageIds) {
         // attempt to lookup the equivalent image name (given the upstream amiId/imageId)
+        Map<String, String> additionalFilters = new HashMap<>();
+        if ("azure".equals(getCloudProvider())) {
+          additionalFilters.put("managedImages", "true");
+        }
         List<Map> allMatchedImages =
-            oortService.findImage(getCloudProvider(), upstreamImageId, null, null, null);
+            oortService.findImage(
+                getCloudProvider(), upstreamImageId, null, null, additionalFilters);
         if (allMatchedImages.isEmpty()) {
           throw new ImageNotFound(format("No image found (imageId: %s)", upstreamImageId), true);
         }
@@ -101,8 +106,12 @@ public abstract class ImageTagger {
     Collection foundImages = new ArrayList();
 
     for (String targetImageName : imageNames) {
+      Map<String, String> additionalFilters = new HashMap<>();
+      if ("azure".equals(getCloudProvider())) {
+        additionalFilters.put("managedImages", "true");
+      }
       List<Map> allMatchedImages =
-          oortService.findImage(getCloudProvider(), targetImageName, null, null, null);
+          oortService.findImage(getCloudProvider(), targetImageName, null, null, additionalFilters);
       Map matchedImage =
           allMatchedImages.stream()
               .filter(image -> image.get("imageName").equals(targetImageName))
@@ -121,8 +130,7 @@ public abstract class ImageTagger {
     return foundImages;
   }
 
-  @VisibleForTesting
-  Collection<String> upstreamImageIds(
+  protected Collection<String> upstreamImageIds(
       StageExecution sourceStage,
       Collection<String> consideredStageRefIds,
       String cloudProviderType) {
