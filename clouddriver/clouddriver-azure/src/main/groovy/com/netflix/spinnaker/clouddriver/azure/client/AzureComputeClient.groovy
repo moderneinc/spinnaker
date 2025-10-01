@@ -182,7 +182,6 @@ public class AzureComputeClient extends AzureBaseClient {
       }
     } catch (Exception e) {
       log.error("getServerGroupsAll -> Unexpected exception: ${e.message}")
-      throw new RuntimeException("Failed to fetch server groups from Azure API for region: ${region}", e)
     }
 
     serverGroups
