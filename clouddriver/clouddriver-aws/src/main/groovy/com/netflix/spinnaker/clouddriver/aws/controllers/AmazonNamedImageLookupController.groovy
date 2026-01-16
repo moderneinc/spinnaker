@@ -128,6 +128,8 @@ class AmazonNamedImageLookupController {
       thisImage.attributes.virtualizationType = data.attributes.virtualizationType
       thisImage.attributes.architecture = data.attributes.architecture
       thisImage.attributes.creationDate = data.attributes.creationDate
+      thisImage.attributes.imageOwnerAlias = data.attributes.imageOwnerAlias
+      thisImage.attributes.ownerId = data.attributes.ownerId
       thisImage.accounts.add(namedImageKeyParts.account)
       thisImage.amis[amiKeyParts.region].add(amiKeyParts.imageId)
       thisImage.tags.putAll((data.attributes.tags as List)?.collectEntries { [it.key.toLowerCase(), it.value] })

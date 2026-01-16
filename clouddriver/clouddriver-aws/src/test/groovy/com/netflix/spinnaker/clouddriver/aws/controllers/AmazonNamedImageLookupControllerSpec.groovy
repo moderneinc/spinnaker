@@ -127,7 +127,9 @@ class AmazonNamedImageLookupControllerSpec extends Specification {
                                                                       imageId: amiId,
                                                                       virtualizationType: virtualizationType,
                                                                       architecture: architecture,
-                                                                      creationDate: creationDate],
+                                                                      creationDate: creationDate,
+                                                                      imageOwnerAlias: imageOwnerAlias,
+                                                                      ownerId: ownerId],
                                                                      [(NAMED_IMAGES.ns): [namedImageId]])]
 
     when:
@@ -155,7 +157,7 @@ class AmazonNamedImageLookupControllerSpec extends Specification {
     results.size() == 1
     with(results[0]) {
       imageName == amiName
-      attributes == [virtualizationType: virtualizationType, creationDate: creationDate, architecture: architecture]
+      attributes == [virtualizationType: virtualizationType, creationDate: creationDate, architecture: architecture, imageOwnerAlias: imageOwnerAlias, ownerId: ownerId]
       tagsByImageId == [(amiId): imageTags]
       accounts == [account] as Set
       amis == [region: [amiId] as Set]
