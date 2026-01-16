@@ -66,6 +66,8 @@ class RoscoAWSConfiguration {
     BakeRequest.VmType virtualizationType
     String instanceType
     String sourceAmi
+    String ownerImageAlias
+    String ownerId
     boolean mostRecent
     String sshUserName
     String winRmUserName
@@ -84,6 +86,8 @@ class RoscoAWSConfiguration {
   static class AWSImageAttributes {
     Date creationDate
     BakeRequest.VmType virtualizationType
+    String ownerImageAlias
+    String ownerId
   }
 
   @PostConstruct
