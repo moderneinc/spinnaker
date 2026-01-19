@@ -250,10 +250,12 @@ public class AWSBakeHandler extends CloudProviderBakeHandler {
     def image
     if (mostRecent) {
       def matchingImages = images?.findAll { it?.attributes?.virtualizationType == vmType }
-              ?.findAll { (!imageOwnerAlias || it?.attributes?.imageOwnerAlias == imageOwnerAlias) || (!ownerId || it?.attributes?.ownerId == ownerId) }
+              ?.findAll { (imageOwnerAlias && it?.attributes?.imageOwnerAlias == imageOwnerAlias) || (ownerId && it?.attributes?.ownerId == ownerId) }
       image = matchingImages?.max {it?.attributes?.creationDate }
     } else {
-      image = images?.find { it.attributes.virtualizationType == vmType && ((!imageOwnerAlias || it?.attributes?.imageOwnerAlias == imageOwnerAlias) || (!ownerId || it?.attributes?.ownerId == ownerId))  }
+      image = images?.find {
+        it.attributes.virtualizationType == vmType && ((imageOwnerAlias && it?.attributes?.imageOwnerAlias == imageOwnerAlias) || (ownerId && it?.attributes?.ownerId == ownerId))
+      }
     }
 
     return image?.amis?.get(region)?.first()
