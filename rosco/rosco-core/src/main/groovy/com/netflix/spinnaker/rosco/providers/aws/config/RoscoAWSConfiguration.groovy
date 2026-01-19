@@ -23,10 +23,7 @@ import com.netflix.spinnaker.rosco.providers.registry.CloudProviderBakeHandlerRe
 import groovy.transform.AutoClone
 import groovy.transform.AutoCloneStyle
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.boot.context.properties.ConfigurationProperties
-import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.ComponentScan
 import org.springframework.context.annotation.Configuration
 
@@ -66,7 +63,7 @@ class RoscoAWSConfiguration {
     BakeRequest.VmType virtualizationType
     String instanceType
     String sourceAmi
-    String ownerImageAlias
+    String imageOwnerAlias
     String ownerId
     boolean mostRecent
     String sshUserName
@@ -86,7 +83,7 @@ class RoscoAWSConfiguration {
   static class AWSImageAttributes {
     Date creationDate
     BakeRequest.VmType virtualizationType
-    String ownerImageAlias
+    String imageOwnerAlias
     String ownerId
   }
 

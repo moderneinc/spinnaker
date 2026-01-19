@@ -119,7 +119,7 @@ class AmazonNamedImageLookupControllerSpec extends Specification {
     def virtualizationType = 'virtualizationType'
     def architecture = 'architecture'
     def creationDate = 'creationDate'
-    def imageOwnerAlias = 'ownerImageAlias'
+    def imageOwnerAlias = 'imageOwnerAlias'
     def ownerId = '0000000000'
     def Collection<CacheData> imageCacheData = [new DefaultCacheData(imageId,
                                                                      [name: amiName,

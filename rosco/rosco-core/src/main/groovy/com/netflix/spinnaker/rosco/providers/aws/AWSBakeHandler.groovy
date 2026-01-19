@@ -121,13 +121,13 @@ public class AWSBakeHandler extends CloudProviderBakeHandler {
     if (!awsVirtualizationSettings.sourceAmi) {
       String base = lookupBaseByDynamicProperty(region, bakeRequest)
       if (base != null && !base.matches(AMI_ID)) {
-        awsVirtualizationSettings.sourceAmi = lookupAmiByName(base, region, account, awsVirtualizationSettings.ownerImageAlias, awsVirtualizationSettings.ownerId, vm_type, awsVirtualizationSettings.mostRecent)
+        awsVirtualizationSettings.sourceAmi = lookupAmiByName(base, region, account, awsVirtualizationSettings.imageOwnerAlias, awsVirtualizationSettings.ownerId, vm_type, awsVirtualizationSettings.mostRecent)
       } else {
         awsVirtualizationSettings.sourceAmi = base
       }
     } else if (!awsVirtualizationSettings.sourceAmi.matches(AMI_ID)) {
       awsVirtualizationSettings.sourceAmi = lookupAmiByName(
-        awsVirtualizationSettings.sourceAmi, region, account, awsVirtualizationSettings.ownerImageAlias, awsVirtualizationSettings.ownerId, vm_type, awsVirtualizationSettings.mostRecent)
+        awsVirtualizationSettings.sourceAmi, region, account, awsVirtualizationSettings.imageOwnerAlias, awsVirtualizationSettings.ownerId, vm_type, awsVirtualizationSettings.mostRecent)
     }
 
     if (awsVirtualizationSettings.sourceAmi == null) {

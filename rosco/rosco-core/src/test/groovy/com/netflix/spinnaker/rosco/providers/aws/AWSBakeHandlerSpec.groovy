@@ -19,6 +19,7 @@ package com.netflix.spinnaker.rosco.providers.aws
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.netflix.spinnaker.kork.core.RetrySupport
 import com.netflix.spinnaker.rosco.api.Bake
+import com.netflix.spinnaker.rosco.api.BakeOptions
 import com.netflix.spinnaker.rosco.api.BakeRequest
 import com.netflix.spinnaker.rosco.config.RoscoConfiguration
 import com.netflix.spinnaker.rosco.providers.aws.config.RoscoAWSConfiguration
@@ -35,6 +36,10 @@ import spock.lang.Specification
 import spock.lang.Subject
 import spock.lang.Unroll
 
+import java.time.Duration
+import java.time.LocalDateTime
+import java.util.function.Supplier
+
 class AWSBakeHandlerSpec extends Specification implements TestDefaults {
 
   private static final String REGION = "us-east-1"
@@ -44,6 +49,7 @@ class AWSBakeHandlerSpec extends Specification implements TestDefaults {
   private static final String SOURCE_BIONIC_HVM_IMAGE_ID = "ami-b054321b"
   private static final String SOURCE_TRUSTY_HVM_IMAGE_NAME = "ami-c456789d"
   private static final String SOURCE_AMZN_HVM_IMAGE_NAME = "ami-8fcee4e5"
+  private static final String SOURCE_NOBLE_HVM_IMAGE_ALIAS = "ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"
   private static final String SOURCE_WINDOWS_2012_R2_HVM_IMAGE_NAME = "ami-21414f36"
 
   @Shared
@@ -1482,6 +1488,60 @@ class AWSBakeHandlerSpec extends Specification implements TestDefaults {
 
     then:
       maskedPackerParams == paramsToMask
+  }
+
+  void "can properly filter by ownerId and/or imageOwnerAlias"() {
+      setup:
+      def retrySupport = Mock(RetrySupport)
+      AWSBakeHandler handler = new AWSBakeHandler(retrySupport: retrySupport, awsBakeryDefaults: new RoscoAWSConfiguration.AWSBakeryDefaults(
+              templateFile: "template.json",
+              defaultVirtualizationType: "hvm",
+              baseImages: [
+                      new RoscoAWSConfiguration.AWSOperatingSystemVirtualizationSettings(
+                              baseImage: new BakeOptions.BaseImage(id: "noble", packageType: "DEB"),
+                              virtualizationSettings: [new RoscoAWSConfiguration.AWSVirtualizationSettings(
+                                      region: REGION,
+                                      virtualizationType: "hvm",
+                                      instanceType: "t2.micro",
+                                      sourceAmi: SOURCE_NOBLE_HVM_IMAGE_ALIAS,
+                                      imageOwnerAlias: "amazon",
+                                      mostRecent: false,
+                                      sshUserName: "ubuntu",
+                                      spotPrice: "auto",
+                                      spotPriceAutoProduct: "Linux/UNIX (Amazon VPC)"
+                              )]
+                      )
+              ]
+      ))
+      BakeRequest bakeRequest = new BakeRequest(
+              account_name: "",
+              user: "someuser@gmail.com",
+              base_os: "noble",
+              package_name: "moderne",
+              base_label: BakeRequest.Label.release,
+              vm_type: BakeRequest.VmType.hvm,
+              cloud_provider_type: BakeRequest.CloudProviderType.aws,
+              extended_attributes: [aws_ena_support: true],
+              template_file_name: "moderne-aws-linux-podman-2404.pkr.hcl"
+      )
+
+      RoscoAWSConfiguration.AWSNamedImage image = new RoscoAWSConfiguration.AWSNamedImage(
+              imageName: SOURCE_NOBLE_HVM_IMAGE_ALIAS,
+              attributes: [imageOwnerAlias: "amazon", virtualizationType: "hvm", creationDate: new Date(), ownerId: "000000000000"],
+              amis: [
+                      "us-east-1": ["ami-123abcdef"]
+              ]
+      )
+
+
+      when:
+      def result = handler.findVirtualizationSettings(REGION, bakeRequest)
+
+      then:
+      result
+      retrySupport.retry(_ as Supplier, 3, Duration.ofSeconds(3), false) >> [image]
+      result.imageOwnerAlias == "amazon"
+      result.sourceAmi == "ami-123abcdef"
   }
 
   static class NoSleepRetry extends RetrySupport {
