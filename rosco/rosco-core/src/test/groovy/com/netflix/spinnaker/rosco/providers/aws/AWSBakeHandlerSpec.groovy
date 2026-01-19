@@ -1525,13 +1525,22 @@ class AWSBakeHandlerSpec extends Specification implements TestDefaults {
               template_file_name: "moderne-aws-linux-podman-2404.pkr.hcl"
       )
 
-      RoscoAWSConfiguration.AWSNamedImage image = new RoscoAWSConfiguration.AWSNamedImage(
-              imageName: SOURCE_NOBLE_HVM_IMAGE_ALIAS,
-              attributes: [imageOwnerAlias: "amazon", virtualizationType: "hvm", creationDate: new Date(), ownerId: "000000000000"],
-              amis: [
-                      "us-east-1": ["ami-123abcdef"]
-              ]
-      )
+      def images = [
+              new RoscoAWSConfiguration.AWSNamedImage(
+                      imageName: SOURCE_NOBLE_HVM_IMAGE_ALIAS,
+                      attributes: [imageOwnerAlias: "aws-marketplace", virtualizationType: "hvm", creationDate: new Date(), ownerId: "000000000000"],
+                      amis: [
+                              "us-east-1": ["ami-456abcdef"]
+                      ]
+              ),
+              new RoscoAWSConfiguration.AWSNamedImage(
+                      imageName: SOURCE_NOBLE_HVM_IMAGE_ALIAS,
+                      attributes: [imageOwnerAlias: "amazon", virtualizationType: "hvm", creationDate: new Date(), ownerId: "000000000000"],
+                      amis: [
+                              "us-east-1": ["ami-123abcdef"]
+                      ]
+              )
+      ]
 
 
       when:
@@ -1539,7 +1548,7 @@ class AWSBakeHandlerSpec extends Specification implements TestDefaults {
 
       then:
       result
-      retrySupport.retry(_ as Supplier, 3, Duration.ofSeconds(3), false) >> [image]
+      retrySupport.retry(_ as Supplier, 3, Duration.ofSeconds(3), false) >> images
       result.imageOwnerAlias == "amazon"
       result.sourceAmi == "ami-123abcdef"
   }
