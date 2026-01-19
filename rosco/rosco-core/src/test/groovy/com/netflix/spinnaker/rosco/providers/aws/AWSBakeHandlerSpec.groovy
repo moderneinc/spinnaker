@@ -1528,16 +1528,16 @@ class AWSBakeHandlerSpec extends Specification implements TestDefaults {
       def images = [
               new RoscoAWSConfiguration.AWSNamedImage(
                       imageName: SOURCE_NOBLE_HVM_IMAGE_ALIAS,
-                      attributes: [imageOwnerAlias: "amazon", virtualizationType: "hvm", creationDate: new Date(), ownerId: "000000000000"],
+                      attributes: [imageOwnerAlias: "aws-marketplace", virtualizationType: "hvm", creationDate: new Date(), ownerId: "000000000000"],
                       amis: [
-                              "us-east-1": ["ami-123abcdef"]
+                              "us-east-1": ["ami-456abcdef"]
                       ]
               ),
               new RoscoAWSConfiguration.AWSNamedImage(
                       imageName: SOURCE_NOBLE_HVM_IMAGE_ALIAS,
-                      attributes: [imageOwnerAlias: "aws-marketplace", virtualizationType: "hvm", creationDate: new Date(), ownerId: "000000000000"],
+                      attributes: [imageOwnerAlias: "amazon", virtualizationType: "hvm", creationDate: new Date(), ownerId: "000000000000"],
                       amis: [
-                              "us-east-1": ["ami-456abcdef"]
+                              "us-east-1": ["ami-123abcdef"]
                       ]
               )
       ]
