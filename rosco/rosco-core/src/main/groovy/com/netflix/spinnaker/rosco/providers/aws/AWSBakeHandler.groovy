@@ -238,7 +238,7 @@ public class AWSBakeHandler extends CloudProviderBakeHandler {
     return awsBakeryDefaults.maskedPackerParameters
   }
 
-  private String lookupAmiByName(String name, String region, String account, String ownerImageAlias, String ownerId, VmType vmType, boolean mostRecent) {
+  private String lookupAmiByName(String name, String region, String account, String imageOwnerAlias, String ownerId, VmType vmType, boolean mostRecent) {
     def images = AuthenticatedRequest.allowAnonymous(
       {
         retrySupport.retry({
@@ -250,10 +250,10 @@ public class AWSBakeHandler extends CloudProviderBakeHandler {
     def image
     if (mostRecent) {
       def matchingImages = images?.findAll { it?.attributes?.virtualizationType == vmType }
-              ?.findAll { (!ownerImageAlias || it?.attributes?.ownerImageAlias == ownerImageAlias) || (!ownerId || it?.attributes?.ownerId == ownerId) }
+              ?.findAll { (!imageOwnerAlias || it?.attributes?.imageOwnerAlias == imageOwnerAlias) || (!ownerId || it?.attributes?.ownerId == ownerId) }
       image = matchingImages?.max {it?.attributes?.creationDate }
     } else {
-      image = images?.find { it.attributes.virtualizationType == vmType && ((!ownerImageAlias || it?.attributes?.ownerImageAlias == ownerImageAlias) || (!ownerId || it?.attributes?.ownerId == ownerId))  }
+      image = images?.find { it.attributes.virtualizationType == vmType && ((!imageOwnerAlias || it?.attributes?.imageOwnerAlias == imageOwnerAlias) || (!ownerId || it?.attributes?.ownerId == ownerId))  }
     }
 
     return image?.amis?.get(region)?.first()
