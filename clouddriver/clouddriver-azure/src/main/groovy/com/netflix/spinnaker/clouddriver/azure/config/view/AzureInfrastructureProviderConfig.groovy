@@ -43,7 +43,6 @@ import java.util.concurrent.ConcurrentHashMap
 @ConditionalOnProperty('azure.enabled')
 class AzureInfrastructureProviderConfig {
   @Bean
-  @DependsOn('azureNamedAccountCredentials')
   AzureInfrastructureProvider azureInfrastructureProvider(AzureCloudProvider azureCloudProvider,
                                                             AccountCredentialsRepository accountCredentialsRepository,
                                                             ObjectMapper objectMapper,
