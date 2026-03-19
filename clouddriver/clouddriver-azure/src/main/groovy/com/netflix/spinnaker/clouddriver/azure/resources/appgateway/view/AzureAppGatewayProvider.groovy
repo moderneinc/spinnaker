@@ -90,6 +90,7 @@ class AzureAppGatewayProvider implements LoadBalancerProvider<AzureLoadBalancer>
       account: parts.account ?: "none",
       name: description.loadBalancerName,
       region: description.region,
+      resourceGroup: description.resourceGroup,
       vnet: description.vnet ?: "vnet-unassigned",
       subnet: description.subnet ?: "subnet-unassigned",
       cluster: description.cluster ?: "unassigned",
@@ -139,7 +140,7 @@ class AzureAppGatewayProvider implements LoadBalancerProvider<AzureLoadBalancer>
         map.put lb.name, summary
       }
 
-      def loadBalancerDetail = new AzureAppGatewayAccountRegionDetail(account: lb.account, name: lb.name, region: lb.region)
+      def loadBalancerDetail = new AzureAppGatewayAccountRegionDetail(account: lb.account, name: lb.name, region: lb.region, resourceGroup: lb.resourceGroup, loadBalancerType: lb.loadBalancerType)
 
       summary.getOrCreateAccount(lb.account).getOrCreateRegion(lb.region).loadBalancers << loadBalancerDetail
     }
@@ -231,5 +232,7 @@ class AzureAppGatewayProvider implements LoadBalancerProvider<AzureLoadBalancer>
     String account
     String region
     String name
+    String resourceGroup
+    String loadBalancerType
   }
 }

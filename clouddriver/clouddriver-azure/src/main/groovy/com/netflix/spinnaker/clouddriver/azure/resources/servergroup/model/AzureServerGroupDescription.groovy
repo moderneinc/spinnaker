@@ -52,7 +52,8 @@ class AzureServerGroupDescription extends AzureResourceOpsDescription implements
   String loadBalancerName
   String loadBalancerType
   String appGatewayName
-  String appGatewayBapId
+  String appGatewayResourceGroup
+  String backendPoolName
   AzureNamedImage image
   AzureScaleSetSku sku
   AzureOperatingSystemConfig osConfig
@@ -189,15 +190,14 @@ class AzureServerGroupDescription extends AzureResourceOpsDescription implements
     } else {
       azureSG.loadBalancerType = AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()
     }
-    azureSG.appGatewayBapId = scaleSet.tags()?.appGatewayBapId
+    azureSG.backendPoolName = scaleSet.tags()?.backendPoolName
+    azureSG.appGatewayResourceGroup = scaleSet.tags()?.appGatewayResourceGroup
 
     def networkInterfaceConfigurations = scaleSet.virtualMachineProfile()?.networkProfile()?.networkInterfaceConfigurations()
 
     if (networkInterfaceConfigurations && networkInterfaceConfigurations.size() > 0) {
       azureSG.enableIpForwarding = networkInterfaceConfigurations[0].enableIpForwarding()
     }
-    // scaleSet.virtualMachineProfile()?.networkProfile()?.networkInterfaceConfigurations()?[0].ipConfigurations()?[0].applicationGatewayBackendAddressPools()?[0].id()
-    // TODO: appGatewayBapId can be retrieved via scaleSet->networkProfile->networkInterfaceConfigurations->ipConfigurations->ApplicationGatewayBackendAddressPools
     azureSG.subnetId = scaleSet.tags()?.subnetId
     azureSG.subnet = AzureUtilities.getNameFromResourceId(azureSG.subnetId)
     azureSG.vnet = azureSG.subnetId ? AzureUtilities.getNameFromResourceId(azureSG.subnetId) : scaleSet.tags()?.vnet

@@ -66,9 +66,11 @@ class AzureServerGroupCachingAgent extends AzureCachingAgent {
     serverGroups?.each {
       try {
         if (it.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_LOAD_BALANCER.toString()) {
-          it.disabled = creds.networkClient.isServerGroupWithLoadBalancerDisabled(AzureUtilities.getResourceGroupName(it.appName, region), it.loadBalancerName, it.name)
+          it.disabled = creds.networkClient.isServerGroupWithLoadBalancerDisabled(AzureUtilities.getResourceGroupName(it.appName, region), it.loadBalancerName, it.name, it.backendPoolName)
         } else if (it.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()) {
-          it.disabled = creds.networkClient.isServerGroupWithAppGatewayDisabled(AzureUtilities.getResourceGroupName(it.appName, region), it.appGatewayName, it.name)
+          def sgRG = AzureUtilities.getResourceGroupName(it.appName, region)
+          def agRG = it.appGatewayResourceGroup ?: sgRG
+          it.disabled = creds.networkClient.isServerGroupWithAppGatewayDisabled(sgRG, agRG, it.appGatewayName, it.name, it.backendPoolName)
         } else if (it.loadBalancerType == null) {
           it.disabled = creds.networkClient.isServerGroupWithoutLoadBalancerDisabled(AzureUtilities.getResourceGroupName(it.appName, region), it.name)
         } else {

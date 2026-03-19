@@ -115,10 +115,7 @@ class AzureAppGatewayResourceTemplate {
       }
       dnsNameForLBIP = description.dnsName ?: DnsSettings.getUniqueDNSName(description.name)
       appGwSubnetID = description.subnetResourceId
-      if (description.trafficEnabledSG) {
-        // This is an edit operation; preserve the current backend address pool as the active rule
-        appGwBeAddrPoolName = description.trafficEnabledSG
-      }
+      // Backend pool name is always static to support path-based routing rules
     }
   }
 
@@ -169,14 +166,6 @@ class AzureAppGatewayResourceTemplate {
         httpListeners.add(new AppGatewayHttpListener(rule.ruleName, rule.protocol.toString(), rule.sslCertificate))
         requestRoutingRules.add(new AppGatewayRequestRoutingRule(rule.ruleName))
       }
-      backendAddressPools = [
-        new AppGatewayBackendAddressPool(name: defaultAppGatewayBeAddrPoolName) // name: "default_BAP0"
-      ]
-      // recreate the backend address pool items if this is an edit operation of an existing application gateway
-      description.serverGroups?.each { serverGroupName ->
-        backendAddressPools << new AppGatewayBackendAddressPool(name: serverGroupName)
-      }
-
       description.probes?.each { probe->
         probes.add(new AppGatewayProbe(probe))
       }

@@ -18,13 +18,14 @@ package com.netflix.spinnaker.clouddriver.azure.client
 
 import com.azure.core.credential.TokenCredential
 import com.azure.core.http.rest.Response
+import com.azure.core.management.SubResource
 import com.azure.core.management.exception.ManagementException
 import com.azure.core.management.profile.AzureProfile
 import com.azure.resourcemanager.compute.models.VirtualMachineScaleSet
+import com.azure.resourcemanager.compute.models.VirtualMachineScaleSetIpConfiguration
 import com.azure.resourcemanager.compute.models.VirtualMachineScaleSetVMs
 import com.azure.resourcemanager.network.fluent.models.NetworkSecurityGroupInner
 import com.azure.resourcemanager.network.models.LoadBalancer
-import com.azure.resourcemanager.network.models.LoadBalancingRule
 import com.azure.resourcemanager.network.models.Network
 import com.azure.resourcemanager.network.models.PublicIpAddress
 import com.netflix.frigga.Names
@@ -39,8 +40,6 @@ import com.netflix.spinnaker.clouddriver.azure.templates.AzureLoadBalancerResour
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
 
-import java.lang.reflect.InvocationTargetException
-import java.lang.reflect.Method
 
 @CompileStatic
 @Slf4j
@@ -267,150 +266,19 @@ class AzureNetworkClient extends AzureBaseClient {
   }
 
   /**
-   * It creates the server group corresponding backend address pool entry in the selected application gateway
-   *  This will be later used as a parameter in the create server group deployment template
-   * @param resourceGroupName the name of the resource group to look into
-   * @param appGatewayName the of the application gateway
-   * @param serverGroupName the of the application gateway
-   * @return a resource id for the backend address pool that got created or null/Runtime Exception if something went wrong
+   * Returns the resource ID of a backend address pool for the given application gateway.
    */
-  String createAppGatewayBAPforServerGroup(String resourceGroupName, String appGatewayName, String serverGroupName) {
-    def appGateway = executeOp({
-      azure.applicationGateways().getByResourceGroup(resourceGroupName, appGatewayName)
-    })
-
-    if (appGateway) {
-      def agDescription = AzureAppGatewayDescription.getDescriptionForAppGateway(appGateway.innerModel())
-      def parsedName = Names.parseName(serverGroupName)
-
-      if (!agDescription || (agDescription.cluster && agDescription.cluster != parsedName.cluster)) {
-        // The selected server group must be in the same cluster and region (see resourceGroup) with the one already
-        //   assigned for the selected application gateway.
-        def errMsg = "Failed to associate ${serverGroupName} with ${appGatewayName}; expecting server group to be in ${agDescription.cluster} cluster"
-        log.error(errMsg)
-        throw new RuntimeException(errMsg)
-      }
-
-      // the application gateway must have an backend address pool list (even if it might be empty)
-      if (!appGateway.backends()?.containsKey(serverGroupName)) {
-        if (agDescription.serverGroups) {
-          agDescription.serverGroups << serverGroupName
-        } else {
-          agDescription.serverGroups = [serverGroupName]
-        }
-
-        appGateway.update()
-          .withTag("cluster", parsedName.cluster)
-          .defineBackend(serverGroupName)
-          .attach()
-          .apply()
-
-        log.info("Adding backend address pool to ${appGateway.name()} for server group ${serverGroupName}")
-      }
-
-      return "${appGateway.id()}/backendAddressPools/${serverGroupName}"
-    }
-
-    null
+  String getAppGatewayPoolId(String resourceGroupName, String appGatewayName, String backendPoolName) {
+    if (!backendPoolName) return null
+    buildAppGatewayPoolId(resourceGroupName, appGatewayName, backendPoolName)
   }
 
   /**
-   * It removes the server group corresponding backend address pool item from the selected application gateway (see disable/destroy server group op)
-   * @param resourceGroupName the name of the resource group to look into
-   * @param appGatewayName the of the application gateway
-   * @param serverGroupName the of the application gateway
-   * @return a resource id for the backend address pool that was removed or null/Runtime Exception if something went wrong
+   * Returns the resource ID of a backend address pool for the given load balancer.
    */
-  String removeAppGatewayBAPforServerGroup(String resourceGroupName, String appGatewayName, String serverGroupName) {
-    def appGateway = executeOp({
-      azure.applicationGateways().getByResourceGroup(resourceGroupName, appGatewayName)
-    })
-
-    if (appGateway) {
-      def agDescription = AzureAppGatewayDescription.getDescriptionForAppGateway(appGateway.innerModel())
-
-      if (!agDescription) {
-        def errMsg = "Failed to disassociate ${serverGroupName} from ${appGatewayName}; could not find ${appGatewayName}"
-        log.error(errMsg)
-        throw new RuntimeException(errMsg)
-      }
-      def agBAP = appGateway.backends().get(serverGroupName)
-      if (agBAP) {
-        def chain = appGateway.update()
-          .withoutBackend(agBAP.name())
-        if (appGateway.backends().size() == 1) {
-          // There are no server groups assigned to ths application gateway; we can make it available now
-          chain = chain.withoutTag("cluster")
-        }
-
-        chain.apply()
-      }
-
-      return "${appGateway.id()}/backendAddressPools/${serverGroupName}"
-    }
-
-    null
-  }
-
-  /**
-   * It creates the server group corresponding backend address pool entry in the selected load balancer
-   *  This will be later used as a parameter in the create server group deployment template
-   * @param resourceGroupName the name of the resource group to look into
-   * @param loadBalancerName the of the application gateway
-   * @param serverGroupName the of the application gateway
-   * @return a resource id for the backend address pool that got created or null/Runtime Exception if something went wrong
-   */
-  String createLoadBalancerAPforServerGroup(String resourceGroupName, String loadBalancerName, String serverGroupName) {
-    def loadBalancer = executeOp({
-      azure.loadBalancers().getByResourceGroup(resourceGroupName, loadBalancerName)
-    })
-
-    if(loadBalancer) {
-      // the application gateway must have an backend address pool list (even if it might be empty)
-      if (!loadBalancer.backends()?.containsKey(serverGroupName)) {
-        loadBalancer.update()
-          .defineBackend(serverGroupName)
-          .attach()
-          .apply()
-
-        log.info("Adding backend address pool to ${loadBalancer.name()} for server group ${serverGroupName}")
-      }
-
-      return "${loadBalancer.id()}/backendAddressPools/${serverGroupName}"
-    } else {
-      throw new RuntimeException("Load balancer ${loadBalancerName} not found in resource group ${resourceGroupName}")
-    }
-
-    return null
-  }
-
-  /**
-   * It removes the server group corresponding backend address pool item from the selected load balancer (see disable/destroy server group op)
-   * @param resourceGroupName the name of the resource group to look into
-   * @param loadBalancerName the name of the load balancer
-   * @param serverGroupName the name of the server group
-   * @return a resource id for the backend address pool that was removed or null/Runtime Exception if something went wrong
-   */
-  String removeLoadBalancerAPforServerGroup(String resourceGroupName, String loadBalancerName, String serverGroupName) {
-    def loadBalancer = executeOp({
-      azure.loadBalancers().getByResourceGroup(resourceGroupName, loadBalancerName)
-    })
-
-    if (loadBalancer) {
-      def lbAP = loadBalancer.backends().get(serverGroupName)
-      if (lbAP) {
-        def chain = loadBalancer.update()
-          .withoutBackend(lbAP.name())
-
-        chain.apply()
-      }
-
-      return "${loadBalancer.id()}/backendAddressPools/${serverGroupName}"
-    } else {
-      throw new RuntimeException("Load balancer ${loadBalancerName} not found in resource group ${resourceGroupName}")
-    }
-
-    null
+  String getLoadBalancerPoolId(String resourceGroupName, String loadBalancerName, String backendPoolName) {
+    if (!backendPoolName) return null
+    buildLoadBalancerPoolId(resourceGroupName, loadBalancerName, backendPoolName)
   }
 
   // Find unused port range. The usedList is the type List<int[]> whose element is int[2]{portStart, portEnd}
@@ -429,97 +297,62 @@ class AzureNetworkClient extends AzureBaseClient {
   }
 
   /**
-   * It enables a server group that is attached to an Application Gateway resource in Azure
-   * @param resourceGroupName name of the resource group where the Application Gateway resource was created (see application name and region/location)
-   * @param appGatewayName the of the application gateway
-   * @param serverGroupName name of the server group to be enabled
-   * @return a ServiceResponse object
+   * Enables a server group by adding a backend pool to its VMSS NIC configuration.
    */
-  void enableServerGroupWithAppGateway(String resourceGroupName, String appGatewayName, String serverGroupName) {
+  void enableServerGroupWithAppGateway(String resourceGroupName, String appGatewayResourceGroupName, String appGatewayName, String serverGroupName, String backendPoolName) {
+    if (!backendPoolName) return
+    def poolId = buildAppGatewayPoolId(appGatewayResourceGroupName, appGatewayName, backendPoolName)
+    def vmss = requireVmss(resourceGroupName, serverGroupName)
+    def ipConfig = getPrimaryIpConfig(vmss)
+
+    def pools = ipConfig.applicationGatewayBackendAddressPools() ?: []
+    if (!pools.any { it.id()?.equalsIgnoreCase(poolId) }) {
+      pools = new ArrayList<>(pools)
+      pools.add(new SubResource().withId(poolId))
+      ipConfig.withApplicationGatewayBackendAddressPools(pools)
+      vmss.update().apply()
+      log.info("Added AG backend pool to VMSS ${vmss.name()}")
+    }
+
+    // Tag the App Gateway with the active server group for debugging
     def appGateway = executeOp({
-      azure.applicationGateways().getByResourceGroup(resourceGroupName, appGatewayName)
+      azure.applicationGateways().getByResourceGroup(appGatewayResourceGroupName, appGatewayName)
     })
-
     if (appGateway) {
-      def agBAP = appGateway.backends().get(serverGroupName)
-      if (!agBAP) {
-        def errMsg = "Backend address pool ${serverGroupName} not found in ${appGatewayName}"
-        log.error(errMsg)
-        throw new RuntimeException(errMsg)
-      }
-
-      appGateway.requestRoutingRules().each { name, rule ->
-        appGateway.update()
-          .updateRequestRoutingRule(name)
-          .toBackend(agBAP.name())
-          .parent()
-          .apply()
-      }
-
-      // Store active server group in the tags map to ease debugging the operation; we could probably remove this later on
-      appGateway.update()
-        .withTag("trafficEnabledSG", serverGroupName)
-        .apply()
+      appGateway.update().withTag("trafficEnabledSG", serverGroupName).apply()
     }
   }
 
   /**
-   * It disables a server group that is attached to an Application Gateway resource in Azure
-   * @param resourceGroupName name of the resource group where the Application Gateway resource was created (see application name and region/location)
-   * @param appGatewayName the of the application gateway
-   * @param serverGroupName name of the server group to be disabled
-   * @return a ServiceResponse object (null if no updates were performed)
+   * Disables a server group by removing a backend pool from its VMSS NIC configuration.
    */
-  void disableServerGroup(String resourceGroupName, String appGatewayName, String serverGroupName) {
+  void disableServerGroup(String resourceGroupName, String appGatewayResourceGroupName, String appGatewayName, String serverGroupName, String backendPoolName) {
+    if (!backendPoolName) return
+    def poolId = buildAppGatewayPoolId(appGatewayResourceGroupName, appGatewayName, backendPoolName)
+    def vmss = requireVmss(resourceGroupName, serverGroupName)
+    def ipConfig = getPrimaryIpConfig(vmss)
+
+    def pools = ipConfig.applicationGatewayBackendAddressPools()
+    if (pools) {
+      def updatedPools = pools.findAll { !it.id()?.equalsIgnoreCase(poolId) }
+      if (updatedPools.size() < pools.size()) {
+        ipConfig.withApplicationGatewayBackendAddressPools(updatedPools)
+        vmss.update().apply()
+        log.info("Removed AG backend pool from VMSS ${vmss.name()}")
+      }
+    }
+
     def appGateway = executeOp({
-      azure.applicationGateways().getByResourceGroup(resourceGroupName, appGatewayName)
+      azure.applicationGateways().getByResourceGroup(appGatewayResourceGroupName, appGatewayName)
     })
-
     if (appGateway) {
-      def defaultBAP = appGateway.backends().get(AzureAppGatewayResourceTemplate.defaultAppGatewayBeAddrPoolName)
-      if (!defaultBAP) {
-        def errMsg = "Backend address pool ${AzureAppGatewayResourceTemplate.defaultAppGatewayBeAddrPoolName} not found in ${appGatewayName}"
-        log.error(errMsg)
-        throw new RuntimeException(errMsg)
-      }
-
-      def agBAP = appGateway.backends().get(serverGroupName)
-      if (!agBAP) {
-        def errMsg = "Backend address pool ${serverGroupName} not found in ${appGatewayName}"
-        log.error(errMsg)
-        throw new RuntimeException(errMsg)
-      }
-
-      // Check if the current server group is the traffic enabled one and remove it (set default BAP as the active BAP)
-      //  otherwise return (no updates are needed)
-      def requestedRoutingRules = appGateway.requestRoutingRules()?.findAll() { name, rule ->
-        rule.backend() == agBAP
-      }
-
-      if (requestedRoutingRules) {
-        requestedRoutingRules.each { name, rule ->
-          appGateway.update()
-            .updateRequestRoutingRule(name)
-            .toBackend(defaultBAP.name())
-            .parent()
-            .apply()
-        }
-
-        // Clear active server group (if any) from the tags map to ease debugging the operation; we will clean this later
-        appGateway.update()
-          .withoutTag("trafficEnabledSG")
-          .apply()
-      }
+      appGateway.update().withoutTag("trafficEnabledSG").apply()
     }
   }
 
   /**
-   * Checks if a server group, not associated with a load balancer, is "enabled". Because "enabled" means "can receive traffic",
-   * and there is no concept of shifting traffic in server groups not fronted by load balancers,
-   * we use the instance count of 0 to proxy saying it is disabled.
-   * @param resourceGroupName name of the resource group where the Application Gateway resource was created (see application name and region/location)
-   * @param serverGroupName name of the server group to be disabled
-   * @return true if instance count is 0, false otherwise
+   * Checks if a server group, not associated with a load balancer, is "enabled".
+   * Uses instance count of 0 to proxy saying it is disabled.
    */
   Boolean isServerGroupWithoutLoadBalancerDisabled(String resourceGroupName, String serverGroupName) {
     VirtualMachineScaleSet scaleSet = executeOp({
@@ -531,167 +364,116 @@ class AzureNetworkClient extends AzureBaseClient {
   }
 
   /**
-   * Checks if a server group that is attached to an Application Gateway resource in Azure is set to receive traffic
-   * @param resourceGroupName name of the resource group where the Application Gateway resource was created (see application name and region/location)
-   * @param appGatewayName the of the application gateway
-   * @param serverGroupName name of the server group to be disabled
-   * @return true or false
+   * Checks if a server group's VMSS is associated with a backend pool on the Application Gateway.
+   * @return true if NOT associated (disabled), false if associated (enabled)
    */
-  Boolean isServerGroupWithAppGatewayDisabled(String resourceGroupName, String appGatewayName, String serverGroupName) {
-    def appGateway = executeOp({
-      azure.applicationGateways().getByResourceGroup(resourceGroupName, appGatewayName)
+  Boolean isServerGroupWithAppGatewayDisabled(String resourceGroupName, String appGatewayResourceGroupName, String appGatewayName, String serverGroupName, String backendPoolName) {
+    if (!backendPoolName) return true
+    def poolId = buildAppGatewayPoolId(appGatewayResourceGroupName, appGatewayName, backendPoolName)
+
+    def vmss = executeOp({
+      azure.virtualMachineScaleSets().getByResourceGroup(resourceGroupName, serverGroupName)
     })
+    if (!vmss) return true
 
-    if (appGateway) {
-      def agBAP = appGateway.backends().get(serverGroupName)
-      if (agBAP) {
-        // Check if the current server group is the traffic enabled one
-        def requestedRoutingRules = appGateway.requestRoutingRules()?.find() { name, rule ->
-          rule.backend() == agBAP
-        }
+    def ipConfig = getPrimaryIpConfigOrNull(vmss)
+    if (!ipConfig) return true
 
-        if (requestedRoutingRules != null) {
-          return false
-        }
-      }
-    }
-
-    true
+    def pools = ipConfig.applicationGatewayBackendAddressPools()
+    return !(pools?.any { it.id()?.equalsIgnoreCase(poolId) })
   }
 
   /**
-   * It enables a server group that is attached to an Azure Load Balancer in Azure
-   * @param resourceGroupName name of the resource group where the Azure Load Balancer resource was created (see application name and region/location)
-   * @param loadBalancerName the of the Azure Load Balancer
-   * @param serverGroupName name of the server group to be enabled
-   * @return a ServiceResponse object
+   * Enables a server group by adding a backend pool to its VMSS NIC configuration.
    */
-  void enableServerGroupWithLoadBalancer(String resourceGroupName, String loadBalancerName, String serverGroupName) {
-    def loadBalancer = executeOp({
-      azure.loadBalancers().getByResourceGroup(resourceGroupName, loadBalancerName)
-    })
+  void enableServerGroupWithLoadBalancer(String resourceGroupName, String loadBalancerName, String serverGroupName, String backendPoolName) {
+    if (!backendPoolName) return
+    def poolId = buildLoadBalancerPoolId(resourceGroupName, loadBalancerName, backendPoolName)
+    def vmss = requireVmss(resourceGroupName, serverGroupName)
+    def ipConfig = getPrimaryIpConfig(vmss)
 
-    if (loadBalancer) {
-      def lbBAP = loadBalancer.backends().get(serverGroupName)
-      if (!lbBAP) {
-        def errMsg = "Backend address pool ${serverGroupName} not found in ${loadBalancerName}"
-        log.error(errMsg)
-        throw new RuntimeException(errMsg)
-      }
-      loadBalancer.loadBalancingRules().each { name, rule ->
-        // Use reflection to modify the backend of load balancer because Azure Java SDK doesn't provide a way to do this
-        Object o = loadBalancer.update()
-          .updateLoadBalancingRule(name)
-        try {
-          Method setRangeMethod = o.getClass().getMethod("toBackend", String.class)
-          setRangeMethod.setAccessible(true)
-          setRangeMethod.invoke(o, serverGroupName)
-          LoadBalancingRule lbrule = o as LoadBalancingRule;
-          lbrule.innerModel().withBackendAddressPools(List.of(lbrule.innerModel().backendAddressPool()))
-        } catch (NoSuchMethodException e) {
-          log.error("Failed to use reflection to set backend of rule in Load Balancer, detail: {}", e.getMessage())
-          return
-        } catch (IllegalAccessException e) {
-          log.error("Failed to use reflection to set backend of rule in Load Balancer, detail: {}", e.getMessage())
-          return
-        } catch (InvocationTargetException e) {
-          log.error("Failed to use reflection to set backend of rule in Load Balancer, detail: {}", e.getMessage())
-          return
-        }
+    def pools = ipConfig.loadBalancerBackendAddressPools() ?: []
+    if (!pools.any { it.id()?.equalsIgnoreCase(poolId) }) {
+      pools = new ArrayList<>(pools)
+      pools.add(new SubResource().withId(poolId))
+      ipConfig.withLoadBalancerBackendAddressPools(pools)
+      vmss.update().apply()
+      log.info("Added LB backend pool to VMSS ${vmss.name()}")
+    }
+  }
 
-        ((LoadBalancingRule.UpdateDefinitionStages.WithAttach<LoadBalancer.Update>)o).attach().apply()
+  /**
+   * Disables a server group by removing a backend pool from its VMSS NIC configuration.
+   */
+  void disableServerGroupWithLoadBalancer(String resourceGroupName, String loadBalancerName, String serverGroupName, String backendPoolName) {
+    if (!backendPoolName) return
+    def poolId = buildLoadBalancerPoolId(resourceGroupName, loadBalancerName, backendPoolName)
+    def vmss = requireVmss(resourceGroupName, serverGroupName)
+    def ipConfig = getPrimaryIpConfig(vmss)
+
+    def pools = ipConfig.loadBalancerBackendAddressPools()
+    if (pools) {
+      def updatedPools = pools.findAll { !it.id()?.equalsIgnoreCase(poolId) }
+      if (updatedPools.size() < pools.size()) {
+        ipConfig.withLoadBalancerBackendAddressPools(updatedPools)
+        vmss.update().apply()
+        log.info("Removed LB backend pool from VMSS ${vmss.name()}")
       }
     }
   }
 
   /**
-   * It disables a server group that is attached to an Azure Load Balancer  resource in Azure
-   * @param resourceGroupName name of the resource group where the Azure Load Balancer  resource was created (see application name and region/location)
-   * @param loadBalancerName the of the Azure Load Balancer
-   * @param serverGroupName name of the server group to be disabled
-   * @return a ServiceResponse object (null if no updates were performed)
+   * Checks if a server group's VMSS is associated with a backend pool on the Load Balancer.
+   * @return true if NOT associated (disabled), false if associated (enabled)
    */
-  void disableServerGroupWithLoadBalancer(String resourceGroupName, String loadBalancerName, String serverGroupName) {
-    def loadBalancer = executeOp({
-      azure.loadBalancers().getByResourceGroup(resourceGroupName, loadBalancerName)
+  Boolean isServerGroupWithLoadBalancerDisabled(String resourceGroupName, String loadBalancerName, String serverGroupName, String backendPoolName) {
+    if (!backendPoolName) return true
+    def poolId = buildLoadBalancerPoolId(resourceGroupName, loadBalancerName, backendPoolName)
+
+    def vmss = executeOp({
+      azure.virtualMachineScaleSets().getByResourceGroup(resourceGroupName, serverGroupName)
     })
+    if (!vmss) return true
 
-    if (loadBalancer) {
-      def defaultBAP = loadBalancer.backends().get(AzureLoadBalancerResourceTemplate.DEFAULT_BACKEND_POOL)
-      if (!defaultBAP) {
-        def errMsg = "Backend address pool ${AzureLoadBalancerResourceTemplate.DEFAULT_BACKEND_POOL} not found in ${loadBalancerName}"
-        log.error(errMsg)
-        throw new RuntimeException(errMsg)
-      }
+    def ipConfig = getPrimaryIpConfigOrNull(vmss)
+    if (!ipConfig) return true
 
-      def lbBAP = loadBalancer.backends().get(serverGroupName)
-      if (!lbBAP) {
-        def errMsg = "Backend address pool ${serverGroupName} not found in ${loadBalancerName}"
-        log.error(errMsg)
-        throw new RuntimeException(errMsg)
-      }
-
-      // Check if the current server group is the traffic enabled one and remove it (set default BAP as the active BAP)
-      //  otherwise return (no updates are needed)
-      def requestedRoutingRules = loadBalancer.loadBalancingRules()?.findAll() { name, rule ->
-        rule.backend() == lbBAP
-      }
-
-      if (requestedRoutingRules) {
-        requestedRoutingRules.each { name, rule ->
-          // Use reflection to modify the backend of load balancer because Azure Java SDK doesn't provide a way to do this
-          Object o = loadBalancer.update()
-            .updateLoadBalancingRule(name)
-          try {
-            Method setRangeMethod = o.getClass().getMethod("toBackend", String.class)
-            setRangeMethod.setAccessible(true)
-            setRangeMethod.invoke(o, AzureLoadBalancerResourceTemplate.DEFAULT_BACKEND_POOL)
-            LoadBalancingRule lbrule = o as LoadBalancingRule;
-            lbrule.innerModel().withBackendAddressPools(List.of(lbrule.innerModel().backendAddressPool()))
-          } catch (NoSuchMethodException e) {
-            log.error("Failed to use reflection to set backend of rule in Load Balancer, detail: {}", e.getMessage())
-            return
-          } catch (IllegalAccessException e) {
-            log.error("Failed to use reflection to set backend of rule in Load Balancer, detail: {}", e.getMessage())
-            return
-          } catch (InvocationTargetException e) {
-            log.error("Failed to use reflection to set backend of rule in Load Balancer, detail: {}", e.getMessage())
-            return
-          }
-
-          ((LoadBalancingRule.UpdateDefinitionStages.WithAttach<LoadBalancer.Update>)o).attach().apply()
-        }
-      }
-    }
+    def pools = ipConfig.loadBalancerBackendAddressPools()
+    return !(pools?.any { it.id()?.equalsIgnoreCase(poolId) })
   }
 
-  /**
-   * Checks if a server group that is attached to an Azure Load Balancer resource in Azure is set to receive traffic
-   * @param resourceGroupName name of the resource group where the Azure Load Balancer resource was created (see application name and region/location)
-   * @param loadBalancerName the of the Azure Load Balancer
-   * @param serverGroupName name of the server group to be disabled
-   * @return true or false
-   */
-  Boolean isServerGroupWithLoadBalancerDisabled(String resourceGroupName, String loadBalancerName, String serverGroupName) {
-    def loadBalancer = executeOp({
-      azure.loadBalancers().getByResourceGroup(resourceGroupName, loadBalancerName)
+  private String buildLoadBalancerPoolId(String resourceGroupName, String loadBalancerName, String poolName) {
+    "/subscriptions/${subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.Network/loadBalancers/${loadBalancerName}/backendAddressPools/${poolName}"
+  }
+
+  private String buildAppGatewayPoolId(String resourceGroupName, String appGatewayName, String poolName) {
+    "/subscriptions/${subscriptionId}/resourceGroups/${resourceGroupName}/providers/Microsoft.Network/applicationGateways/${appGatewayName}/backendAddressPools/${poolName}"
+  }
+
+  private VirtualMachineScaleSet requireVmss(String resourceGroupName, String serverGroupName) {
+    def vmss = executeOp({
+      azure.virtualMachineScaleSets().getByResourceGroup(resourceGroupName, serverGroupName)
     })
-
-    if (loadBalancer) {
-      def lbBAP = loadBalancer.backends().get(serverGroupName)
-      if (lbBAP) {
-        // Check if the current server group is the traffic enabled one
-        def requestedRoutingRules = loadBalancer.loadBalancingRules()?.find() { name, rule ->
-          rule.backend() == lbBAP
-        }
-
-        if (requestedRoutingRules != null) {
-          return false
-        }
-      }
+    if (!vmss) {
+      throw new RuntimeException("Virtual Machine Scale Set ${serverGroupName} not found in resource group ${resourceGroupName}")
     }
+    vmss
+  }
 
-    true
+  private VirtualMachineScaleSetIpConfiguration getPrimaryIpConfig(VirtualMachineScaleSet vmss) {
+    def ipConfig = getPrimaryIpConfigOrNull(vmss)
+    if (!ipConfig) {
+      throw new RuntimeException("No NIC/IP configurations found on VMSS ${vmss.name()}")
+    }
+    ipConfig
+  }
+
+  private VirtualMachineScaleSetIpConfiguration getPrimaryIpConfigOrNull(VirtualMachineScaleSet vmss) {
+    def nicConfigs = vmss.innerModel().virtualMachineProfile().networkProfile().networkInterfaceConfigurations()
+    if (!nicConfigs || nicConfigs.isEmpty()) return null
+    def ipConfigs = nicConfigs.get(0).ipConfigurations()
+    if (!ipConfigs || ipConfigs.isEmpty()) return null
+    ipConfigs.get(0)
   }
 
   /**

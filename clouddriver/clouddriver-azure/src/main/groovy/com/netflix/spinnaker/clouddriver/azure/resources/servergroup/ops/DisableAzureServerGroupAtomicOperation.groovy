@@ -115,26 +115,27 @@ class DisableAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
   }
 
   private void disableServerGroupWithApplicationGateway(String resourceGroupName, AzureServerGroupDescription serverGroupDescription, region) {
-    if (description.credentials.networkClient.isServerGroupWithAppGatewayDisabled(resourceGroupName, serverGroupDescription.appGatewayName, serverGroupDescription.name)) {
+    String appGatewayRG = serverGroupDescription.appGatewayResourceGroup ?: resourceGroupName
+    if (description.credentials.networkClient.isServerGroupWithAppGatewayDisabled(resourceGroupName, appGatewayRG, serverGroupDescription.appGatewayName, serverGroupDescription.name, serverGroupDescription.backendPoolName)) {
       task.updateStatus BASE_PHASE, "Azure server group ${serverGroupDescription.name} in ${region} is already disabled."
     } else {
       description
         .credentials
         .networkClient
-        .disableServerGroup(resourceGroupName, serverGroupDescription.appGatewayName, serverGroupDescription.name)
+        .disableServerGroup(resourceGroupName, appGatewayRG, serverGroupDescription.appGatewayName, serverGroupDescription.name, serverGroupDescription.backendPoolName)
 
       task.updateStatus BASE_PHASE, "Done disabling Azure server group ${serverGroupDescription.name} in ${region}."
     }
   }
 
   private void disableServerGroupWithLoadBalancer(String resourceGroupName, AzureServerGroupDescription serverGroupDescription, region) {
-    if (description.credentials.networkClient.isServerGroupWithLoadBalancerDisabled(resourceGroupName, serverGroupDescription.loadBalancerName, serverGroupDescription.name)) {
+    if (description.credentials.networkClient.isServerGroupWithLoadBalancerDisabled(resourceGroupName, serverGroupDescription.loadBalancerName, serverGroupDescription.name, serverGroupDescription.backendPoolName)) {
       task.updateStatus BASE_PHASE, "Azure server group ${serverGroupDescription.name} in ${region} is already disabled."
     } else {
       description
         .credentials
         .networkClient
-        .disableServerGroupWithLoadBalancer(resourceGroupName, serverGroupDescription.loadBalancerName, serverGroupDescription.name)
+        .disableServerGroupWithLoadBalancer(resourceGroupName, serverGroupDescription.loadBalancerName, serverGroupDescription.name, serverGroupDescription.backendPoolName)
 
       task.updateStatus BASE_PHASE, "Done disabling Azure server group ${serverGroupDescription.name} in ${region}."
     }

@@ -25,6 +25,7 @@ import com.netflix.spinnaker.clouddriver.azure.templates.AzureAppGatewayResource
 
 class AzureAppGatewayDescription extends AzureResourceOpsDescription {
   String loadBalancerName
+  String resourceGroup
   String vnet
   String subnet
   String subnetResourceId /* Azure resource ID */
@@ -75,6 +76,7 @@ class AzureAppGatewayDescription extends AzureResourceOpsDescription {
 
   static AzureAppGatewayDescription getDescriptionForAppGateway(ApplicationGatewayInner appGateway) {
     AzureAppGatewayDescription description = new AzureAppGatewayDescription(name: appGateway.name())
+    description.resourceGroup = AzureUtilities.getResourceGroupNameFromResourceId(appGateway.id())
     def parsedName = Names.parseName(appGateway.name())
     description.stack = appGateway.tags()?.stack ?: parsedName.stack
     description.detail = appGateway.tags()?.detail ?: parsedName.detail
