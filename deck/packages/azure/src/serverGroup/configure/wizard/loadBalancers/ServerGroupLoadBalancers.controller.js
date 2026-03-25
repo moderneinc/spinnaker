@@ -31,9 +31,7 @@ module(AZURE_SERVERGROUP_CONFIGURE_WIZARD_LOADBALANCERS_SERVERGROUPLOADBALANCERS
       const defaultRG = getDefaultResourceGroup();
       const rgsFromLBs = _.chain(allLBs)
         .filter(function (lb) {
-          return lb.account === $scope.command.credentials &&
-                 lb.region === $scope.command.region &&
-                 lb.resourceGroup;
+          return lb.account === $scope.command.credentials && lb.region === $scope.command.region && lb.resourceGroup;
         })
         .map('resourceGroup')
         .uniq()
@@ -50,9 +48,11 @@ module(AZURE_SERVERGROUP_CONFIGURE_WIZARD_LOADBALANCERS_SERVERGROUPLOADBALANCERS
       const allLBs = $scope.command.backingData.loadBalancers;
       const resourceGroup = $scope.command.appGatewayResourceGroup;
       const filtered = _.filter(allLBs, function (lb) {
-        return lb.account === $scope.command.credentials &&
-               lb.region === $scope.command.region &&
-               (!resourceGroup || !lb.resourceGroup || lb.resourceGroup === resourceGroup);
+        return (
+          lb.account === $scope.command.credentials &&
+          lb.region === $scope.command.region &&
+          (!resourceGroup || !lb.resourceGroup || lb.resourceGroup === resourceGroup)
+        );
       });
       $scope.command.loadBalancers = _.chain(filtered).map('name').uniq().value().sort();
     };
