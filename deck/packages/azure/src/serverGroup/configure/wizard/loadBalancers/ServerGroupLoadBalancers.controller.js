@@ -46,7 +46,7 @@ module(AZURE_SERVERGROUP_CONFIGURE_WIZARD_LOADBALANCERS_SERVERGROUPLOADBALANCERS
 
     this.filterLoadBalancersByResourceGroup = function () {
       const allLBs = $scope.command.backingData.loadBalancers;
-      const resourceGroup = $scope.command.appGatewayResourceGroup;
+      const resourceGroup = $scope.command.loadBalancerResourceGroup;
       const filtered = _.filter(allLBs, function (lb) {
         return (
           lb.account === $scope.command.credentials &&
@@ -148,10 +148,10 @@ module(AZURE_SERVERGROUP_CONFIGURE_WIZARD_LOADBALANCERS_SERVERGROUPLOADBALANCERS
         $scope.useLoadBalancer = true;
       }
       if ($scope.useLoadBalancer) {
-        if (!$scope.command.appGatewayResourceGroup) {
-          $scope.command.appGatewayResourceGroup = getDefaultResourceGroup();
+        if (!$scope.command.loadBalancerResourceGroup) {
+          $scope.command.loadBalancerResourceGroup = getDefaultResourceGroup();
         }
-        this.availableResourceGroups = [$scope.command.appGatewayResourceGroup];
+        this.availableResourceGroups = [$scope.command.loadBalancerResourceGroup];
         this.filterLoadBalancersByResourceGroup();
       }
       loadVnetSubnets($scope.command.loadBalancerName, $scope.command.loadBalancerType);
@@ -198,13 +198,13 @@ module(AZURE_SERVERGROUP_CONFIGURE_WIZARD_LOADBALANCERS_SERVERGROUPLOADBALANCERS
 
         if ($scope.useLoadBalancer) {
           // Checkbox was just checked — set default resource group and filter
-          $scope.command.appGatewayResourceGroup = getDefaultResourceGroup();
-          this.availableResourceGroups = [$scope.command.appGatewayResourceGroup];
+          $scope.command.loadBalancerResourceGroup = getDefaultResourceGroup();
+          this.availableResourceGroups = [$scope.command.loadBalancerResourceGroup];
           this.allLoadBalancersLoaded = false;
           this.filterLoadBalancersByResourceGroup();
         } else {
           // Checkbox was unchecked — clear everything
-          $scope.command.appGatewayResourceGroup = null;
+          $scope.command.loadBalancerResourceGroup = null;
           this.availableResourceGroups = [];
         }
 

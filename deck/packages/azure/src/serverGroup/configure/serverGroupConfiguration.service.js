@@ -283,7 +283,7 @@ angular
             command.loadBalancerName = null;
             command.loadBalancerType = null;
             command.backendPoolName = null;
-            command.appGatewayResourceGroup = null;
+            command.loadBalancerResourceGroup = null;
             command.vnet = null;
             command.vnetResourceGroup = null;
             command.subnet = null;

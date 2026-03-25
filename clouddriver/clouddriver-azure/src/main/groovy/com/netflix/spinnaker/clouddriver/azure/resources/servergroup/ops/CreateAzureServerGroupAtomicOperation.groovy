@@ -88,7 +88,7 @@ class CreateAzureServerGroupAtomicOperation implements AtomicOperation<Map> {
         description.appGatewayName = description.loadBalancerName
         description.loadBalancerName = null
       }
-      String appGatewayRG = description.appGatewayResourceGroup ?: resourceGroupName
+      String appGatewayRG = description.loadBalancerResourceGroup ?: resourceGroupName
       def appGatewayDescription = description.credentials.networkClient.getAppGateway(appGatewayRG, description.appGatewayName)
 
       if (!appGatewayDescription) {

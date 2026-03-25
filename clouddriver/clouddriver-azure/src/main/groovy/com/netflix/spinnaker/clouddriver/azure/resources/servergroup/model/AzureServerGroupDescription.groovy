@@ -52,7 +52,7 @@ class AzureServerGroupDescription extends AzureResourceOpsDescription implements
   String loadBalancerName
   String loadBalancerType
   String appGatewayName
-  String appGatewayResourceGroup
+  String loadBalancerResourceGroup
   String backendPoolName
   AzureNamedImage image
   AzureScaleSetSku sku
@@ -191,7 +191,7 @@ class AzureServerGroupDescription extends AzureResourceOpsDescription implements
       azureSG.loadBalancerType = AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()
     }
     azureSG.backendPoolName = scaleSet.tags()?.backendPoolName
-    azureSG.appGatewayResourceGroup = scaleSet.tags()?.appGatewayResourceGroup
+    azureSG.loadBalancerResourceGroup = scaleSet.tags()?.loadBalancerResourceGroup
 
     def networkInterfaceConfigurations = scaleSet.virtualMachineProfile()?.networkProfile()?.networkInterfaceConfigurations()
 
