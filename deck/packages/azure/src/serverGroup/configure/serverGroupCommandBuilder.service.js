@@ -87,6 +87,8 @@ angular
           securityGroups: serverGroup.securityGroups,
           loadBalancerName: serverGroup.loadBalancerName,
           loadBalancerType: serverGroup.loadBalancerType,
+          backendPoolName: serverGroup.backendPoolName,
+          appGatewayResourceGroup: serverGroup.appGatewayResourceGroup,
           securityGroupName: serverGroup.securityGroupName,
           region: serverGroup.region,
           vnet: serverGroup.vnet,

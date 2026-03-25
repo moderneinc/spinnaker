@@ -91,7 +91,7 @@ class AzureLoadBalancerResourceTemplate {
         publicIPAddressName = AzureUtilities.PUBLICIP_NAME_PREFIX + description.loadBalancerName.toLowerCase()
       }
       loadBalancerFrontEnd = AzureUtilities.LBFRONTEND_NAME_PREFIX + description.loadBalancerName.toLowerCase()
-      loadBalancerBackEnd = description.trafficEnabledSG ? description.trafficEnabledSG : DEFAULT_BACKEND_POOL
+      loadBalancerBackEnd = DEFAULT_BACKEND_POOL
       dnsNameForLBIP = description.dnsName ?: DnsSettings.getUniqueDNSName(description.loadBalancerName.toLowerCase())
       ipConfigName = AzureUtilities.IPCONFIG_NAME_PREFIX + description.loadBalancerName.toLowerCase()
     }
@@ -163,9 +163,6 @@ class AzureLoadBalancerResourceTemplate {
     LoadBalancerProperties(AzureLoadBalancerDescription description){
       frontEndIPConfigurations.add(new FrontEndIpConfiguration())
       backendAddressPools.add(new BackEndAddressPool())
-      description.serverGroups?.each {
-        backendAddressPools.add(new BackEndAddressPool(it))
-      }
       description.loadBalancingRules?.each{
         it.persistence = description.sessionPersistence
         loadBalancingRules.add(new LoadBalancingRule(it))

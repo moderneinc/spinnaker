@@ -45,13 +45,14 @@ class AzureLoadBalancer implements LoadBalancer {
   String account
   String name
   String region
+  String resourceGroup
   String vnet
   String subnet
   Set<LoadBalancerServerGroup> serverGroups = new HashSet<>()
   String cluster
   final String type = AzureCloudProvider.ID
   final String cloudProvider = AzureCloudProvider.ID
-  final AzureLoadBalancerType loadBalancerType
+  AzureLoadBalancerType loadBalancerType
 
   void setMoniker(Moniker _ignored) {}
 

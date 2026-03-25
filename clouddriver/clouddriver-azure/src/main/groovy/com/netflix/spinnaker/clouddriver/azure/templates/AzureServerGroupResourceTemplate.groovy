@@ -385,6 +385,8 @@ class AzureServerGroupResourceTemplate {
       // debug only; can be removed as part of the tags cleanup
       if (description.appGatewayName) tags.appGatewayName = description.appGatewayName
       if (description.loadBalancerName) tags.loadBalancerName = description.loadBalancerName
+      if (description.backendPoolName) tags.backendPoolName = description.backendPoolName
+      if (description.appGatewayResourceGroup) tags.appGatewayResourceGroup = description.appGatewayResourceGroup
       // will need this when cloning a server group
       if (description.image.imageName) tags.imageName = description.image.imageName
 

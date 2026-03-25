@@ -88,7 +88,8 @@ class CreateAzureServerGroupAtomicOperation implements AtomicOperation<Map> {
         description.appGatewayName = description.loadBalancerName
         description.loadBalancerName = null
       }
-      def appGatewayDescription = description.credentials.networkClient.getAppGateway(resourceGroupName, description.appGatewayName)
+      String appGatewayRG = description.appGatewayResourceGroup ?: resourceGroupName
+      def appGatewayDescription = description.credentials.networkClient.getAppGateway(appGatewayRG, description.appGatewayName)
 
       if (!appGatewayDescription) {
         throw new RuntimeException("Invalid load balancer was selected; $description.appGatewayName does not exist")
@@ -159,18 +160,15 @@ class CreateAzureServerGroupAtomicOperation implements AtomicOperation<Map> {
       description.subnet = subnetName
       description.vnetResourceGroup = appGatewayDescription.vnetResourceGroup
 
-      // Verify that it can be used for this server group/cluster. create a backend address pool entry if it doesn't already exist
-      task.updateStatus(BASE_PHASE, "Create new backend address pool in $description.appGatewayName")
+      // Resolve the backend address pool from the Application Gateway
+      task.updateStatus(BASE_PHASE, "Resolving backend address pool in $description.appGatewayName")
       appGatewayPoolID = description.credentials
         .networkClient
-        .createAppGatewayBAPforServerGroup(resourceGroupName, description.appGatewayName, description.name)
+        .getAppGatewayPoolId(appGatewayRG, description.appGatewayName, description.backendPoolName)
 
       if (!appGatewayPoolID) {
-        throw new RuntimeException("Selected Load Balancer $description.appGatewayName does not exist")
+        throw new RuntimeException("Selected Application Gateway $description.appGatewayName does not exist")
       }
-
-      // TODO: Debug only; can be removed as part of tags cleanup
-      description.appGatewayBapId = appGatewayPoolID
 
       Map<String, Object> templateParameters = [:]
 
@@ -223,11 +221,11 @@ class CreateAzureServerGroupAtomicOperation implements AtomicOperation<Map> {
       errList.add(e.message)
     }
     if (errList.isEmpty()) {
-      if (description.credentials.networkClient.isServerGroupWithAppGatewayDisabled(resourceGroupName, description.appGatewayName, description.name)) {
+      if (description.credentials.networkClient.isServerGroupWithAppGatewayDisabled(resourceGroupName, appGatewayRG, description.appGatewayName, description.name, description.backendPoolName)) {
         description
           .credentials
           .networkClient
-          .enableServerGroupWithAppGateway(resourceGroupName, description.appGatewayName, description.name)
+          .enableServerGroupWithAppGateway(resourceGroupName, appGatewayRG, description.appGatewayName, description.name, description.backendPoolName)
         task.updateStatus BASE_PHASE, "Done enabling Azure server group ${description.name} in ${description.region}."
       } else {
         task.updateStatus BASE_PHASE, "Azure server group ${description.name} in ${description.region} is already enabled."

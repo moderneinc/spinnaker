@@ -453,8 +453,10 @@ class AzureVMImageLookupControllerTest {
         .willReturn(List.of(c));
 
     // Mock credentials for buildAzureNamedImage
-    var mockCreds = mock(com.netflix.spinnaker.clouddriver.azure.security.AzureNamedAccountCredentials.class);
-    var mockAzureCreds = mock(com.netflix.spinnaker.clouddriver.azure.security.AzureCredentials.class);
+    var mockCreds =
+        mock(com.netflix.spinnaker.clouddriver.azure.security.AzureNamedAccountCredentials.class);
+    var mockAzureCreds =
+        mock(com.netflix.spinnaker.clouddriver.azure.security.AzureCredentials.class);
     given(mockCreds.getCredentials()).willReturn(mockAzureCreds);
     given(mockAzureCreds.getSubscriptionId()).willReturn(SUBSCRIPTION_ID);
     doReturn(mockCreds).when(accountCredentialsProvider).getCredentials(AZURE_ACCOUNT);
@@ -466,8 +468,13 @@ class AzureVMImageLookupControllerTest {
     ArgumentCaptor<String> namespace = ArgumentCaptor.forClass(String.class);
     assertThat(list).isNotEmpty().hasSize(1);
     AzureNamedImage namedImage = list.get(0);
-    String expectedUri = "/subscriptions/" + SUBSCRIPTION_ID + "/resourceGroups/" + RESOURCE_GROUP
-        + "/providers/Microsoft.Compute/images/" + VM_IMAGE_NAME;
+    String expectedUri =
+        "/subscriptions/"
+            + SUBSCRIPTION_ID
+            + "/resourceGroups/"
+            + RESOURCE_GROUP
+            + "/providers/Microsoft.Compute/images/"
+            + VM_IMAGE_NAME;
     assertThat(namedImage)
         .isNotNull()
         .returns(VM_IMAGE_NAME, AzureNamedImage::getImageName)
@@ -518,8 +525,10 @@ class AzureVMImageLookupControllerTest {
         .willReturn(List.of(c));
 
     // Mock credentials for buildAzureNamedImage
-    var mockCreds = mock(com.netflix.spinnaker.clouddriver.azure.security.AzureNamedAccountCredentials.class);
-    var mockAzureCreds = mock(com.netflix.spinnaker.clouddriver.azure.security.AzureCredentials.class);
+    var mockCreds =
+        mock(com.netflix.spinnaker.clouddriver.azure.security.AzureNamedAccountCredentials.class);
+    var mockAzureCreds =
+        mock(com.netflix.spinnaker.clouddriver.azure.security.AzureCredentials.class);
     given(mockCreds.getCredentials()).willReturn(mockAzureCreds);
     given(mockAzureCreds.getSubscriptionId()).willReturn(SUBSCRIPTION_ID);
     doReturn(mockCreds).when(accountCredentialsProvider).getCredentials(AZURE_ACCOUNT);
@@ -531,8 +540,13 @@ class AzureVMImageLookupControllerTest {
     ArgumentCaptor<String> namespace = ArgumentCaptor.forClass(String.class);
     assertThat(list).isNotEmpty().hasSize(1);
     AzureNamedImage namedImage = list.get(0);
-    String expectedUri = "/subscriptions/" + SUBSCRIPTION_ID + "/resourceGroups/" + RESOURCE_GROUP
-        + "/providers/Microsoft.Compute/images/" + VM_IMAGE_NAME;
+    String expectedUri =
+        "/subscriptions/"
+            + SUBSCRIPTION_ID
+            + "/resourceGroups/"
+            + RESOURCE_GROUP
+            + "/providers/Microsoft.Compute/images/"
+            + VM_IMAGE_NAME;
     assertThat(namedImage)
         .isNotNull()
         .returns(VM_IMAGE_NAME, AzureNamedImage::getImageName)
@@ -613,9 +627,16 @@ class AzureVMImageLookupControllerTest {
     galleryImage.setOsType(OS_TYPE);
     galleryImage.setTags(Map.of("build_host", "packer", "appversion", "1.0.0"));
     galleryImage.setResourceId(
-        "/subscriptions/" + SUBSCRIPTION_ID + "/resourceGroups/" + RESOURCE_GROUP
-            + "/providers/Microsoft.Compute/galleries/" + GALLERY_NAME
-            + "/images/" + IMAGE_DEF_NAME + "/versions/" + GALLERY_VERSION);
+        "/subscriptions/"
+            + SUBSCRIPTION_ID
+            + "/resourceGroups/"
+            + RESOURCE_GROUP
+            + "/providers/Microsoft.Compute/galleries/"
+            + GALLERY_NAME
+            + "/images/"
+            + IMAGE_DEF_NAME
+            + "/versions/"
+            + GALLERY_VERSION);
     return objectMapper.convertValue(galleryImage, new TypeReference<>() {});
   }
 
@@ -660,8 +681,10 @@ class AzureVMImageLookupControllerTest {
         .willReturn(List.of(galleryCacheData));
 
     // Mock credentials for buildGalleryAzureNamedImage
-    var mockCreds = mock(com.netflix.spinnaker.clouddriver.azure.security.AzureNamedAccountCredentials.class);
-    var mockAzureCreds = mock(com.netflix.spinnaker.clouddriver.azure.security.AzureCredentials.class);
+    var mockCreds =
+        mock(com.netflix.spinnaker.clouddriver.azure.security.AzureNamedAccountCredentials.class);
+    var mockAzureCreds =
+        mock(com.netflix.spinnaker.clouddriver.azure.security.AzureCredentials.class);
     given(mockCreds.getCredentials()).willReturn(mockAzureCreds);
     given(mockAzureCreds.getSubscriptionId()).willReturn(SUBSCRIPTION_ID);
     doReturn(mockCreds).when(accountCredentialsProvider).getCredentials(AZURE_ACCOUNT);
@@ -726,8 +749,10 @@ class AzureVMImageLookupControllerTest {
         .willReturn(List.of(galleryCacheData));
 
     // Mock credentials
-    var mockCreds = mock(com.netflix.spinnaker.clouddriver.azure.security.AzureNamedAccountCredentials.class);
-    var mockAzureCreds = mock(com.netflix.spinnaker.clouddriver.azure.security.AzureCredentials.class);
+    var mockCreds =
+        mock(com.netflix.spinnaker.clouddriver.azure.security.AzureNamedAccountCredentials.class);
+    var mockAzureCreds =
+        mock(com.netflix.spinnaker.clouddriver.azure.security.AzureCredentials.class);
     given(mockCreds.getCredentials()).willReturn(mockAzureCreds);
     given(mockAzureCreds.getSubscriptionId()).willReturn(SUBSCRIPTION_ID);
     doReturn(mockCreds).when(accountCredentialsProvider).getCredentials(AZURE_ACCOUNT);
