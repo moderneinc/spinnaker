@@ -115,7 +115,7 @@ class DisableAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
   }
 
   private void disableServerGroupWithApplicationGateway(String resourceGroupName, AzureServerGroupDescription serverGroupDescription, region) {
-    String appGatewayRG = serverGroupDescription.appGatewayResourceGroup ?: resourceGroupName
+    String appGatewayRG = serverGroupDescription.loadBalancerResourceGroup ?: resourceGroupName
     if (description.credentials.networkClient.isServerGroupWithAppGatewayDisabled(resourceGroupName, appGatewayRG, serverGroupDescription.appGatewayName, serverGroupDescription.name, serverGroupDescription.backendPoolName)) {
       task.updateStatus BASE_PHASE, "Azure server group ${serverGroupDescription.name} in ${region} is already disabled."
     } else {

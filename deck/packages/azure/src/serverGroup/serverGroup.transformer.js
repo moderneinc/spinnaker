@@ -88,7 +88,7 @@ module(AZURE_SERVERGROUP_SERVERGROUP_TRANSFORMER, []).factory('azureServerGroupT
       loadBalancerName: command.loadBalancerName,
       loadBalancerType: command.loadBalancerType,
       backendPoolName: command.backendPoolName,
-      appGatewayResourceGroup: command.appGatewayResourceGroup,
+      loadBalancerResourceGroup: command.loadBalancerResourceGroup,
       user: '[anonymous]',
       upgradePolicy: 'Manual',
       type: 'createServerGroup',

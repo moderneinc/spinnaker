@@ -78,7 +78,7 @@ class EnableAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
               task.updateStatus BASE_PHASE, "Azure server group ${serverGroupDescription.name} in ${region} is already enabled."
             }
           } else if (serverGroupDescription.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()) {
-            String appGatewayRG = serverGroupDescription.appGatewayResourceGroup ?: resourceGroupName
+            String appGatewayRG = serverGroupDescription.loadBalancerResourceGroup ?: resourceGroupName
             if (description.credentials.networkClient.isServerGroupWithAppGatewayDisabled(resourceGroupName, appGatewayRG, serverGroupDescription.appGatewayName, serverGroupDescription.name, serverGroupDescription.backendPoolName)) {
               description
                 .credentials

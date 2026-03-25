@@ -386,7 +386,7 @@ class AzureServerGroupResourceTemplate {
       if (description.appGatewayName) tags.appGatewayName = description.appGatewayName
       if (description.loadBalancerName) tags.loadBalancerName = description.loadBalancerName
       if (description.backendPoolName) tags.backendPoolName = description.backendPoolName
-      if (description.appGatewayResourceGroup) tags.appGatewayResourceGroup = description.appGatewayResourceGroup
+      if (description.loadBalancerResourceGroup) tags.loadBalancerResourceGroup = description.loadBalancerResourceGroup
       // will need this when cloning a server group
       if (description.image.imageName) tags.imageName = description.image.imageName
 
