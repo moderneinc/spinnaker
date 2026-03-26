@@ -173,32 +173,32 @@ class CreateAzureServerGroupAtomicOperation implements AtomicOperation<Map> {
       description.subnet = subnetName
       description.vnetResourceGroup = vnetResourceGroup
 
-      // Resolve the backend address pool
+      // Resolve the backend address pool (if a backendPoolName was specified)
       String backendPoolID = null
-      if (description.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()) {
-        task.updateStatus(BASE_PHASE, "Resolving backend address pool in Application Gateway $description.appGatewayName")
-        backendPoolID = description.credentials
-          .networkClient
-          .getAppGatewayPoolId(loadBalancerRG, description.appGatewayName, description.backendPoolName)
-
-        if (!backendPoolID) {
-          throw new RuntimeException("Selected Application Gateway $description.appGatewayName does not exist")
-        }
-      } else {
-        task.updateStatus(BASE_PHASE, "Resolving backend address pool in Load Balancer $description.loadBalancerName")
-        backendPoolID = description.credentials
-          .networkClient
-          .getLoadBalancerPoolId(loadBalancerRG, description.loadBalancerName, description.backendPoolName)
-
-        if (!backendPoolID) {
-          throw new RuntimeException("Selected Load Balancer $description.loadBalancerName does not exist")
+      if (description.backendPoolName) {
+        if (description.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()) {
+          task.updateStatus(BASE_PHASE, "Resolving backend address pool in Application Gateway $description.appGatewayName")
+          backendPoolID = description.credentials
+            .networkClient
+            .getAppGatewayPoolId(loadBalancerRG, description.appGatewayName, description.backendPoolName)
+        } else {
+          task.updateStatus(BASE_PHASE, "Resolving backend address pool in Load Balancer $description.loadBalancerName")
+          backendPoolID = description.credentials
+            .networkClient
+            .getLoadBalancerPoolId(loadBalancerRG, description.loadBalancerName, description.backendPoolName)
         }
       }
 
       Map<String, Object> templateParameters = [:]
 
       templateParameters[AzureServerGroupResourceTemplate.subnetParameterName] = subnetId
-      templateParameters[AzureServerGroupResourceTemplate.appGatewayAddressPoolParameterName] = backendPoolID
+      if (backendPoolID) {
+        if (description.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()) {
+          templateParameters[AzureServerGroupResourceTemplate.appGatewayAddressPoolParameterName] = backendPoolID
+        } else {
+          templateParameters[AzureServerGroupResourceTemplate.loadBalancerAddressPoolParameterName] = backendPoolID
+        }
+      }
       templateParameters[AzureServerGroupResourceTemplate.vmUserNameParameterName] = new KeyVaultSecret("VMUsername",
         description.credentials.subscriptionId,
         description.credentials.defaultResourceGroup,
