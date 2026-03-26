@@ -681,7 +681,9 @@ class AzureServerGroupResourceTemplate {
     NetworkInterfaceIPConfigurationsProperty(AzureServerGroupDescription description) {
       if(description.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_LOAD_BALANCER.toString()) {
         subnet = new NetworkInterfaceIPConfigurationSubnet()
-        loadBalancerBackendAddressPools.add(new ExistLoadBalancerBackendAddressPool())
+        if(description.backendPoolName) {
+          loadBalancerBackendAddressPools.add(new ExistLoadBalancerBackendAddressPool())
+        }
       } else if (description.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()) {
         subnet = new NetworkInterfaceIPConfigurationSubnet()
         if(description.enableInboundNAT) {
