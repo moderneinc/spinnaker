@@ -1,6 +1,7 @@
 name: Build and Upload Echo
 
 on:
+  workflow_dispatch:
   pull_request:
     types:
       - closed
