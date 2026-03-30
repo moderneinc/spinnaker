@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.netflix.spinnaker.orca.api.pipeline.models.StageExecution;
 import com.netflix.spinnaker.orca.clouddriver.OortService;
 import com.netflix.spinnaker.orca.clouddriver.tasks.image.ImageTagger;
+import com.netflix.spinnaker.kork.retrofit.Retrofit2SyncCall;
 import java.util.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -130,12 +131,13 @@ public class AzureImageTagger extends ImageTagger {
       additionalFilters.put("galleryImages", "true");
 
       List<Map> foundImages =
-          oortService.findImage(
-              getCloudProvider(),
-              targetImage.imageName,
-              targetImage.account,
-              null,
-              additionalFilters);
+          Retrofit2SyncCall.execute(
+              oortService.findImage(
+                  getCloudProvider(),
+                  targetImage.imageName,
+                  targetImage.account,
+                  null,
+                  additionalFilters));
 
       if (foundImages.isEmpty()) {
         return false;
