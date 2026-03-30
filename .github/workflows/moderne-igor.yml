@@ -1,6 +1,7 @@
 name: Build and Upload Igor
 
 on:
+  workflow_dispatch:
   pull_request:
     types:
       - closed

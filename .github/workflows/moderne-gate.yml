@@ -1,6 +1,7 @@
 name: Build and Upload Gate
 
 on:
+  workflow_dispatch:
   pull_request:
     types:
       - closed
