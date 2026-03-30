@@ -8,6 +8,7 @@ import com.netflix.frigga.ami.AppVersion;
 import com.netflix.spinnaker.orca.api.pipeline.models.StageExecution;
 import com.netflix.spinnaker.orca.clouddriver.OortService;
 import com.netflix.spinnaker.orca.clouddriver.tasks.image.ImageFinder;
+import com.netflix.spinnaker.kork.retrofit.Retrofit2SyncCall;
 import java.util.*;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -49,7 +50,9 @@ public class AzureImageFinder implements ImageFinder {
     searchParams.put("managedImages", "true");
 
     List<AzureManagedImage> allMatchedImages =
-        oortService.findImage(getCloudProvider(), packageName, account, null, searchParams).stream()
+        Retrofit2SyncCall.execute(
+                oortService.findImage(getCloudProvider(), packageName, account, null, searchParams))
+            .stream()
             .map(image -> objectMapper.convertValue(image, AzureManagedImage.class))
             .filter(image -> regions.contains(image.region))
             .sorted()
