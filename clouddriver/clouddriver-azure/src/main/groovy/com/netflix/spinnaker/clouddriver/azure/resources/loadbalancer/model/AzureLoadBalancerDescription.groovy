@@ -28,6 +28,7 @@ import groovy.transform.CompileStatic
 @CompileStatic
 class AzureLoadBalancerDescription extends AzureResourceOpsDescription {
   String loadBalancerName
+  String resourceGroup
   String vnet
   String subnet
   String securityGroup
@@ -86,6 +87,7 @@ class AzureLoadBalancerDescription extends AzureResourceOpsDescription {
 
   static AzureLoadBalancerDescription build(LoadBalancerInner azureLoadBalancer) {
     AzureLoadBalancerDescription description = new AzureLoadBalancerDescription(loadBalancerName: azureLoadBalancer.name())
+    description.resourceGroup = AzureUtilities.getResourceGroupNameFromResourceId(azureLoadBalancer.id())
     def parsedName = Names.parseName(azureLoadBalancer.name())
     description.stack = azureLoadBalancer.tags()?.stack ?: parsedName.stack
     description.detail = azureLoadBalancer.tags()?.detail ?: parsedName.detail

@@ -18,6 +18,7 @@ package com.netflix.spinnaker.clouddriver.azure.resources.servergroup.ops
 
 import com.netflix.spinnaker.clouddriver.azure.common.AzureUtilities
 import com.netflix.spinnaker.clouddriver.azure.resources.common.model.AzureDeploymentOperation
+import com.netflix.spinnaker.clouddriver.azure.resources.loadbalancer.model.AzureLoadBalancer
 import com.netflix.spinnaker.clouddriver.azure.resources.network.model.AzureVirtualNetworkDescription
 import com.netflix.spinnaker.clouddriver.azure.resources.network.view.AzureNetworkProvider
 import com.netflix.spinnaker.clouddriver.azure.resources.common.model.KeyVaultSecret
@@ -63,7 +64,7 @@ class CreateAzureServerGroupAtomicOperation implements AtomicOperation<Map> {
     String virtualNetworkName = null
     String subnetName = null
     String subnetId
-    String appGatewayPoolID = null
+    String loadBalancerRG = null
 
     try {
       task.updateStatus(BASE_PHASE, "Beginning server group deployment")
@@ -82,24 +83,37 @@ class CreateAzureServerGroupAtomicOperation implements AtomicOperation<Map> {
       }
 
       resourceGroupName = AzureUtilities.getResourceGroupName(description.application, description.region)
+      loadBalancerRG = description.loadBalancerResourceGroup ?: resourceGroupName
 
-      // TODO: replace appGatewayName with loadBalancerName
-      if (!description.appGatewayName) {
+      String vnetResourceGroup = null
+
+      if (description.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()) {
         description.appGatewayName = description.loadBalancerName
-        description.loadBalancerName = null
-      }
-      def appGatewayDescription = description.credentials.networkClient.getAppGateway(resourceGroupName, description.appGatewayName)
+        def appGatewayDescription = description.credentials.networkClient.getAppGateway(loadBalancerRG, description.appGatewayName)
 
-      if (!appGatewayDescription) {
-        throw new RuntimeException("Invalid load balancer was selected; $description.appGatewayName does not exist")
+        if (!appGatewayDescription) {
+          throw new RuntimeException("Invalid Application Gateway was selected; $description.appGatewayName does not exist")
+        }
+
+        virtualNetworkName = appGatewayDescription.vnet
+        if (description.vnet && description.vnet != virtualNetworkName) {
+          throw new RuntimeException("Invalid Application Gateway was selected; $description.appGatewayName does not exist")
+        }
+        vnetResourceGroup = appGatewayDescription.vnetResourceGroup
+      } else if (description.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_LOAD_BALANCER.toString()) {
+        def loadBalancerDescription = description.credentials.networkClient.getLoadBalancer(loadBalancerRG, description.loadBalancerName)
+
+        if (!loadBalancerDescription) {
+          throw new RuntimeException("Invalid Load Balancer was selected; $description.loadBalancerName does not exist")
+        }
+
+        virtualNetworkName = description.vnet ?: loadBalancerDescription.vnet
+        vnetResourceGroup = description.vnetResourceGroup ?: loadBalancerRG
+      } else {
+        throw new RuntimeException("Invalid load balancer type: $description.loadBalancerType")
       }
 
-      virtualNetworkName = appGatewayDescription.vnet
-      if (description.vnet && description.vnet != virtualNetworkName) {
-        throw new RuntimeException("Invalid load balancer was selected; $description.appGatewayName does not exist")
-      }
-
-      def vnetDescription = networkProvider.get(description.accountName, description.region, appGatewayDescription.vnetResourceGroup, virtualNetworkName)
+      def vnetDescription = networkProvider.get(description.accountName, description.region, vnetResourceGroup, virtualNetworkName)
 
       if (!vnetDescription) {
         throw new RuntimeException("Selected virtual network $virtualNetworkName does not exist")
@@ -157,25 +171,34 @@ class CreateAzureServerGroupAtomicOperation implements AtomicOperation<Map> {
       description.appName = description.application
       description.vnet = virtualNetworkName
       description.subnet = subnetName
-      description.vnetResourceGroup = appGatewayDescription.vnetResourceGroup
+      description.vnetResourceGroup = vnetResourceGroup
 
-      // Verify that it can be used for this server group/cluster. create a backend address pool entry if it doesn't already exist
-      task.updateStatus(BASE_PHASE, "Create new backend address pool in $description.appGatewayName")
-      appGatewayPoolID = description.credentials
-        .networkClient
-        .createAppGatewayBAPforServerGroup(resourceGroupName, description.appGatewayName, description.name)
-
-      if (!appGatewayPoolID) {
-        throw new RuntimeException("Selected Load Balancer $description.appGatewayName does not exist")
+      // Resolve the backend address pool (if a backendPoolName was specified)
+      String backendPoolID = null
+      if (description.backendPoolName) {
+        if (description.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()) {
+          task.updateStatus(BASE_PHASE, "Resolving backend address pool in Application Gateway $description.appGatewayName")
+          backendPoolID = description.credentials
+            .networkClient
+            .getAppGatewayPoolId(loadBalancerRG, description.appGatewayName, description.backendPoolName)
+        } else {
+          task.updateStatus(BASE_PHASE, "Resolving backend address pool in Load Balancer $description.loadBalancerName")
+          backendPoolID = description.credentials
+            .networkClient
+            .getLoadBalancerPoolId(loadBalancerRG, description.loadBalancerName, description.backendPoolName)
+        }
       }
-
-      // TODO: Debug only; can be removed as part of tags cleanup
-      description.appGatewayBapId = appGatewayPoolID
 
       Map<String, Object> templateParameters = [:]
 
       templateParameters[AzureServerGroupResourceTemplate.subnetParameterName] = subnetId
-      templateParameters[AzureServerGroupResourceTemplate.appGatewayAddressPoolParameterName] = appGatewayPoolID
+      if (backendPoolID) {
+        if (description.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()) {
+          templateParameters[AzureServerGroupResourceTemplate.appGatewayAddressPoolParameterName] = backendPoolID
+        } else {
+          templateParameters[AzureServerGroupResourceTemplate.loadBalancerAddressPoolParameterName] = backendPoolID
+        }
+      }
       templateParameters[AzureServerGroupResourceTemplate.vmUserNameParameterName] = new KeyVaultSecret("VMUsername",
         description.credentials.subscriptionId,
         description.credentials.defaultResourceGroup,
@@ -223,14 +246,26 @@ class CreateAzureServerGroupAtomicOperation implements AtomicOperation<Map> {
       errList.add(e.message)
     }
     if (errList.isEmpty()) {
-      if (description.credentials.networkClient.isServerGroupWithAppGatewayDisabled(resourceGroupName, description.appGatewayName, description.name)) {
-        description
-          .credentials
-          .networkClient
-          .enableServerGroupWithAppGateway(resourceGroupName, description.appGatewayName, description.name)
-        task.updateStatus BASE_PHASE, "Done enabling Azure server group ${description.name} in ${description.region}."
-      } else {
-        task.updateStatus BASE_PHASE, "Azure server group ${description.name} in ${description.region} is already enabled."
+      if (description.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_LOAD_BALANCER.toString()) {
+        if (description.credentials.networkClient.isServerGroupWithLoadBalancerDisabled(resourceGroupName, description.loadBalancerName, description.name, description.backendPoolName)) {
+          description
+            .credentials
+            .networkClient
+            .enableServerGroupWithLoadBalancer(resourceGroupName, description.loadBalancerName, description.name, description.backendPoolName)
+          task.updateStatus BASE_PHASE, "Done enabling Azure server group ${description.name} in ${description.region}."
+        } else {
+          task.updateStatus BASE_PHASE, "Azure server group ${description.name} in ${description.region} is already enabled."
+        }
+      } else if (description.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()) {
+        if (description.credentials.networkClient.isServerGroupWithAppGatewayDisabled(resourceGroupName, loadBalancerRG, description.appGatewayName, description.name, description.backendPoolName)) {
+          description
+            .credentials
+            .networkClient
+            .enableServerGroupWithAppGateway(resourceGroupName, loadBalancerRG, description.appGatewayName, description.name, description.backendPoolName)
+          task.updateStatus BASE_PHASE, "Done enabling Azure server group ${description.name} in ${description.region}."
+        } else {
+          task.updateStatus BASE_PHASE, "Azure server group ${description.name} in ${description.region} is already enabled."
+        }
       }
 
       def healthy = description.credentials.computeClient.waitForScaleSetHealthy(resourceGroupName, description.name)

@@ -385,6 +385,8 @@ class AzureServerGroupResourceTemplate {
       // debug only; can be removed as part of the tags cleanup
       if (description.appGatewayName) tags.appGatewayName = description.appGatewayName
       if (description.loadBalancerName) tags.loadBalancerName = description.loadBalancerName
+      if (description.backendPoolName) tags.backendPoolName = description.backendPoolName
+      if (description.loadBalancerResourceGroup) tags.loadBalancerResourceGroup = description.loadBalancerResourceGroup
       // will need this when cloning a server group
       if (description.image.imageName) tags.imageName = description.image.imageName
 
@@ -679,7 +681,9 @@ class AzureServerGroupResourceTemplate {
     NetworkInterfaceIPConfigurationsProperty(AzureServerGroupDescription description) {
       if(description.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_LOAD_BALANCER.toString()) {
         subnet = new NetworkInterfaceIPConfigurationSubnet()
-        loadBalancerBackendAddressPools.add(new ExistLoadBalancerBackendAddressPool())
+        if(description.backendPoolName) {
+          loadBalancerBackendAddressPools.add(new ExistLoadBalancerBackendAddressPool())
+        }
       } else if (description.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()) {
         subnet = new NetworkInterfaceIPConfigurationSubnet()
         if(description.enableInboundNAT) {

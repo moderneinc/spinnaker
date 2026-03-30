@@ -174,19 +174,20 @@ public class CreateAzureServerGroupWithAzureLoadBalancerAtomicOperation
       description.setClusterName(description.getClusterName());
       description.setAppName(description.getApplication());
 
-      // Verify that it can be used for this server group/cluster. create a backend address pool
-      // entry if it doesn't already exist
+      // Resolve the backend address pool from the Load Balancer
       getTask()
           .updateStatus(
               BASE_PHASE,
               String.format(
-                  "Create new backend address pool in Load Balancer: %s", loadBalancerName));
+                  "Resolving backend address pool in Load Balancer: %s", loadBalancerName));
       loadBalancerPoolID =
           description
               .getCredentials()
               .getNetworkClient()
-              .createLoadBalancerAPforServerGroup(
-                  resourceGroupName, description.getLoadBalancerName(), description.getName());
+              .getLoadBalancerPoolId(
+                  resourceGroupName,
+                  description.getLoadBalancerName(),
+                  description.getBackendPoolName());
 
       if (loadBalancerPoolID == null) {
         throw new RuntimeException(
@@ -276,13 +277,19 @@ public class CreateAzureServerGroupWithAzureLoadBalancerAtomicOperation
       if (description
           .getCredentials()
           .getNetworkClient()
-          .isServerGroupWithAppGatewayDisabled(
-              resourceGroupName, description.getLoadBalancerName(), description.getName())) {
+          .isServerGroupWithLoadBalancerDisabled(
+              resourceGroupName,
+              description.getLoadBalancerName(),
+              description.getName(),
+              description.getBackendPoolName())) {
         description
             .getCredentials()
             .getNetworkClient()
             .enableServerGroupWithLoadBalancer(
-                resourceGroupName, description.getLoadBalancerName(), description.getName());
+                resourceGroupName,
+                description.getLoadBalancerName(),
+                description.getName(),
+                description.getBackendPoolName());
 
         getTask()
             .updateStatus(

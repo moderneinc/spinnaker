@@ -66,7 +66,7 @@ class AzureLoadBalancerProvider implements LoadBalancerProvider<AzureLoadBalance
         map.put lb.name, summary
       }
 
-      def loadBalancerDetail = new AzureLoadBalancerDetail(account: lb.account, name: lb.name, region: lb.region)
+      def loadBalancerDetail = new AzureLoadBalancerDetail(account: lb.account, name: lb.name, region: lb.region, resourceGroup: lb.resourceGroup, loadBalancerType: lb.loadBalancerType)
 
       summary.getOrCreateAccount(lb.account).getOrCreateRegion(lb.region).loadBalancers << loadBalancerDetail
     }
@@ -149,6 +149,8 @@ class AzureLoadBalancerProvider implements LoadBalancerProvider<AzureLoadBalance
     String account
     String region
     String name
+    String resourceGroup
+    String loadBalancerType
     String type="azure"
   }
 
@@ -194,6 +196,7 @@ class AzureLoadBalancerProvider implements LoadBalancerProvider<AzureLoadBalance
       account: parts.account ?: "none",
       name: loadBalancerDescription.loadBalancerName,
       region: loadBalancerDescription.region,
+      resourceGroup: loadBalancerDescription.resourceGroup,
       vnet: loadBalancerDescription.vnet ?: "vnet-unassigned",
       subnet: loadBalancerDescription.subnet ?: "subnet-unassigned",
       loadBalancerType: AzureLoadBalancer.AzureLoadBalancerType.AZURE_LOAD_BALANCER

@@ -67,22 +67,23 @@ class EnableAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
       } else {
         try {
           if (serverGroupDescription.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_LOAD_BALANCER.toString()) {
-            if (description.credentials.networkClient.isServerGroupWithLoadBalancerDisabled(resourceGroupName, serverGroupDescription.loadBalancerName, serverGroupDescription.name)) {
+            if (description.credentials.networkClient.isServerGroupWithLoadBalancerDisabled(resourceGroupName, serverGroupDescription.loadBalancerName, serverGroupDescription.name, serverGroupDescription.backendPoolName)) {
               description
                 .credentials
                 .networkClient
-                .enableServerGroupWithLoadBalancer(resourceGroupName, serverGroupDescription.loadBalancerName, serverGroupDescription.name)
+                .enableServerGroupWithLoadBalancer(resourceGroupName, serverGroupDescription.loadBalancerName, serverGroupDescription.name, serverGroupDescription.backendPoolName)
 
               waitForHealthy(resourceGroupName, serverGroupDescription, region, errList)
             } else {
               task.updateStatus BASE_PHASE, "Azure server group ${serverGroupDescription.name} in ${region} is already enabled."
             }
           } else if (serverGroupDescription.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()) {
-            if (description.credentials.networkClient.isServerGroupWithAppGatewayDisabled(resourceGroupName, serverGroupDescription.appGatewayName, serverGroupDescription.name)) {
+            String loadBalancerRG = serverGroupDescription.loadBalancerResourceGroup ?: resourceGroupName
+            if (description.credentials.networkClient.isServerGroupWithAppGatewayDisabled(resourceGroupName, loadBalancerRG, serverGroupDescription.appGatewayName, serverGroupDescription.name, serverGroupDescription.backendPoolName)) {
               description
                 .credentials
                 .networkClient
-                .enableServerGroupWithAppGateway(resourceGroupName, serverGroupDescription.appGatewayName, serverGroupDescription.name)
+                .enableServerGroupWithAppGateway(resourceGroupName, loadBalancerRG, serverGroupDescription.appGatewayName, serverGroupDescription.name, serverGroupDescription.backendPoolName)
 
               waitForHealthy(resourceGroupName, serverGroupDescription, region, errList)
             } else {

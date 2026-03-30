@@ -224,13 +224,7 @@ class AzureAppGatewayResourceTemplateSpec extends Specification {
           "port" : "8080"
         }
       } ],
-      "backendAddressPools" : [ {
-        "name" : "default_BAP0"
-      }, {
-        "name" : "testappgw-sg1-d1-v000"
-      }, {
-        "name" : "testappgw-sg1-d1-v001"
-      } ],
+      "backendAddressPools" : [ ],
       "backendHttpSettingsCollection" : [ {
         "name" : "appGwBackendHttpSettings-rule1",
         "properties" : {
@@ -384,9 +378,7 @@ class AzureAppGatewayResourceTemplateSpec extends Specification {
         }
       } ],
       "frontendPorts" : [ ],
-      "backendAddressPools" : [ {
-        "name" : "default_BAP0"
-      } ],
+      "backendAddressPools" : [ ],
       "backendHttpSettingsCollection" : [ ],
       "httpListeners" : [ ],
       "requestRoutingRules" : [ ],
@@ -464,9 +456,7 @@ class AzureAppGatewayResourceTemplateSpec extends Specification {
         }
       } ],
       "frontendPorts" : [ ],
-      "backendAddressPools" : [ {
-        "name" : "default_BAP0"
-      } ],
+      "backendAddressPools" : [ ],
       "backendHttpSettingsCollection" : [ ],
       "httpListeners" : [ ],
       "requestRoutingRules" : [ ],
