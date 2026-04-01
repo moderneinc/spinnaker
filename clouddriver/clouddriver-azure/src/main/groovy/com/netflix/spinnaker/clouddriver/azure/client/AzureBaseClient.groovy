@@ -19,7 +19,9 @@ package com.netflix.spinnaker.clouddriver.azure.client
 import com.azure.core.credential.TokenCredential
 import com.azure.core.http.HttpClient
 import com.azure.core.http.netty.NettyAsyncHttpClientBuilder
+import com.azure.core.http.policy.ExponentialBackoff
 import com.azure.core.http.policy.HttpLogDetailLevel
+import com.azure.core.http.policy.RetryPolicy
 import com.azure.core.http.rest.Response
 import com.azure.core.management.AzureEnvironment
 import com.azure.core.management.exception.ManagementException
@@ -32,12 +34,16 @@ import com.fasterxml.jackson.databind.SerializationFeature
 
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
+import java.time.Duration
 
 @Slf4j
 @CompileStatic
 abstract class AzureBaseClient {
   final String subscriptionId
   final static long AZURE_ATOMICOPERATION_RETRY = 5
+  final static int HTTP_TOO_MANY_REQUESTS = 429
+  final static int DEFAULT_429_RETRY_INTERVAL_SEC = 30
+  final static int MAX_429_RETRY_INTERVAL_SEC = 120
   static ObjectMapper mapper
   final AzureResourceManager azure
 
@@ -62,10 +68,15 @@ abstract class AzureBaseClient {
         )
     ).build()
 
+    def retryPolicy = new RetryPolicy(
+      new ExponentialBackoff(5, Duration.ofSeconds(2), Duration.ofSeconds(60))
+    )
+
     AzureResourceManager
       .configure()
       .withLogLevel(HttpLogDetailLevel.NONE)
       .withHttpClient(httpClient)
+      .withRetryPolicy(retryPolicy)
       .authenticate(credentials, azureProfile)
       .withSubscription(subscriptionId)
   }
@@ -170,13 +181,23 @@ abstract class AzureBaseClient {
    */
   private static boolean handleTooManyRequestsResponse(Exception e) {
     if (e.class == ManagementException.class) {
-      if ((e as ManagementException).getResponse().getStatusCode() == 429) {
-        int retryAfterIntervalSec = (e as ManagementException).getResponse().getHeaderValue("Retry-After").toInteger()
-        if (retryAfterIntervalSec) {
-          log.warn("Received 'Too Many Requests' (429) response from Azure. Retrying in $retryAfterIntervalSec seconds")
-          sleep(retryAfterIntervalSec * 1000) // convert to milliseconds
-          return true
+      def response = (e as ManagementException).getResponse()
+      if (response.getStatusCode() == HTTP_TOO_MANY_REQUESTS) {
+        int retryAfterIntervalSec = DEFAULT_429_RETRY_INTERVAL_SEC
+        try {
+          String retryAfterHeader = response.getHeaderValue("Retry-After")
+          if (retryAfterHeader) {
+            retryAfterIntervalSec = retryAfterHeader.toInteger()
+          }
+        } catch (Exception ignored) {
+          // Retry-After may be an HTTP-date or unparseable; use default
         }
+        if (retryAfterIntervalSec <= 0 || retryAfterIntervalSec > MAX_429_RETRY_INTERVAL_SEC) {
+          retryAfterIntervalSec = DEFAULT_429_RETRY_INTERVAL_SEC
+        }
+        log.warn("Received 'Too Many Requests' (429) response from Azure. Retrying in $retryAfterIntervalSec seconds")
+        sleep(retryAfterIntervalSec * 1000) // convert to milliseconds
+        return true
       }
     }
     false
@@ -204,6 +225,9 @@ abstract class AzureBaseClient {
         } else {
           if (operationRetry >= count) {
             throw e
+          }
+          if (e.getResponse().getStatusCode() == HTTP_TOO_MANY_REQUESTS) {
+            handleTooManyRequestsResponse(e)
           }
         }
       }
