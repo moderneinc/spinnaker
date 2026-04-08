@@ -31,7 +31,7 @@ import com.netflix.spinnaker.clouddriver.azure.common.AzureUtilities
 import com.netflix.spinnaker.clouddriver.azure.common.cache.AzureCachingAgent
 import com.netflix.spinnaker.clouddriver.azure.common.cache.MutableCacheData
 import com.netflix.spinnaker.clouddriver.azure.resources.common.cache.Keys
-import com.netflix.spinnaker.clouddriver.azure.resources.loadbalancer.model.AzureLoadBalancer
+
 import com.netflix.spinnaker.clouddriver.cache.OnDemandType
 
 import static com.netflix.spinnaker.clouddriver.azure.resources.common.cache.Keys.Namespace.*
@@ -63,24 +63,6 @@ class AzureServerGroupCachingAgent extends AzureCachingAgent {
     def start = System.currentTimeMillis()
 
     List<AzureServerGroupDescription> serverGroups = creds.computeClient.getServerGroupsAll(region)
-    serverGroups?.each {
-      try {
-        if (it.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_LOAD_BALANCER.toString()) {
-          it.disabled = creds.networkClient.isServerGroupWithLoadBalancerDisabled(AzureUtilities.getResourceGroupName(it.appName, region), it.loadBalancerName, it.name, it.backendPoolName)
-        } else if (it.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()) {
-          def sgRG = AzureUtilities.getResourceGroupName(it.appName, region)
-          def lbRG = it.loadBalancerResourceGroup ?: sgRG
-          it.disabled = creds.networkClient.isServerGroupWithAppGatewayDisabled(sgRG, lbRG, it.appGatewayName, it.name, it.backendPoolName)
-        } else if (it.loadBalancerType == null) {
-          it.disabled = creds.networkClient.isServerGroupWithoutLoadBalancerDisabled(AzureUtilities.getResourceGroupName(it.appName, region), it.name)
-        } else {
-          throw new RuntimeException("Invalid load balancer type $it.loadBalancerType")
-        }
-
-      } catch (Exception e) {
-        log.warn("Exception ${e.message} while computing 'isDisable' state for server group ${it.name}")
-      }
-    }
 
     Collection<String> keys = serverGroups.collect {Keys.getServerGroupKey(AzureCloudProvider.ID, it.name, region, accountName ) }
     def onDemandCacheResults = providerCache.getAll(AZURE_ON_DEMAND.ns, keys, RelationshipCacheFilter.none())

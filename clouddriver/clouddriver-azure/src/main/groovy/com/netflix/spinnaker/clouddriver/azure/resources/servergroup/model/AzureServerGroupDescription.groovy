@@ -193,6 +193,9 @@ class AzureServerGroupDescription extends AzureResourceOpsDescription implements
     azureSG.backendPoolName = scaleSet.tags()?.backendPoolName
     azureSG.loadBalancerResourceGroup = scaleSet.tags()?.loadBalancerResourceGroup
 
+    // Compute disabled state from NIC IP configuration data already in the inner model
+    azureSG.disabled = computeDisabledState(scaleSet, azureSG.loadBalancerType, azureSG.backendPoolName)
+
     def networkInterfaceConfigurations = scaleSet.virtualMachineProfile()?.networkProfile()?.networkInterfaceConfigurations()
 
     if (networkInterfaceConfigurations && networkInterfaceConfigurations.size() > 0) {
@@ -299,6 +302,38 @@ class AzureServerGroupDescription extends AzureResourceOpsDescription implements
     azureSG.provisioningState = scaleSet.provisioningState()
 
     azureSG
+  }
+
+  private static boolean computeDisabledState(VirtualMachineScaleSetInner scaleSet, String loadBalancerType, String backendPoolName) {
+    if (loadBalancerType == null) {
+      // No load balancer — use capacity as proxy for disabled
+      return (scaleSet.sku()?.capacity() ?: 0) == 0
+    }
+
+    if (!backendPoolName) return true
+
+    def ipConfig = getPrimaryIpConfigFromInner(scaleSet)
+    if (!ipConfig) return true
+
+    if (loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_LOAD_BALANCER.toString()) {
+      def pools = ipConfig.loadBalancerBackendAddressPools()
+      return !(pools?.any { it.id()?.toLowerCase()?.contains("/backendaddresspools/${backendPoolName.toLowerCase()}") })
+    }
+
+    if (loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()) {
+      def pools = ipConfig.applicationGatewayBackendAddressPools()
+      return !(pools?.any { it.id()?.toLowerCase()?.contains("/backendaddresspools/${backendPoolName.toLowerCase()}") })
+    }
+
+    false
+  }
+
+  private static getPrimaryIpConfigFromInner(VirtualMachineScaleSetInner scaleSet) {
+    def nicConfigs = scaleSet.virtualMachineProfile()?.networkProfile()?.networkInterfaceConfigurations()
+    if (!nicConfigs || nicConfigs.isEmpty()) return null
+    def ipConfigs = nicConfigs.get(0).ipConfigurations()
+    if (!ipConfigs || ipConfigs.isEmpty()) return null
+    ipConfigs.get(0)
   }
 
   static Collection<Instance> filterInstancesByHealthState(Set<? extends Instance> instances, HealthState healthState) {
