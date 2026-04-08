@@ -30,6 +30,13 @@ public class AzureImageTagger extends ImageTagger {
   protected OperationContext getOperationContext(StageExecution stage) {
     StageData stageData = stage.mapTo(StageData.class);
 
+    // Build operations directly from upstream stage data when possible
+    // to avoid cache lookup delays (newly baked images may not be cached yet)
+    OperationContext upstreamContext = buildOperationsFromUpstream(stage, stageData);
+    if (upstreamContext != null) {
+      return upstreamContext;
+    }
+
     Collection<MatchedImage> matchedImages =
         findImages(stageData.imageNames, stageData.consideredStages, stage, MatchedImage.class);
 
@@ -37,6 +44,90 @@ public class AzureImageTagger extends ImageTagger {
       throw new IllegalStateException("No images found for tagging");
     }
 
+    return buildOperations(matchedImages, stageData);
+  }
+
+  private OperationContext buildOperationsFromUpstream(
+      StageExecution stage, StageData stageData) {
+    Collection<String> rawImageIds =
+        super.upstreamImageIds(stage, stageData.consideredStages, getCloudProvider());
+
+    if (rawImageIds.isEmpty()) {
+      return null;
+    }
+
+    // Check if all upstream images are Azure resource IDs
+    boolean allAzureResourceIds =
+        rawImageIds.stream().allMatch(id -> id != null && id.startsWith("/subscriptions/"));
+    if (!allAzureResourceIds) {
+      return null;
+    }
+
+    List<Image> targetImages = new ArrayList<>();
+    List<Map<String, Map>> operations = new ArrayList<>();
+
+    List<StageExecution> ancestors = stage.ancestors();
+
+    for (String resourceId : rawImageIds) {
+      boolean isGallery = isSigResourceId(resourceId);
+      String imageName =
+          isGallery ? extractSigImageName(resourceId) : extractManagedImageName(resourceId);
+      String account = null;
+      String region = null;
+      String resourceGroup = extractResourceGroup(resourceId);
+
+      for (StageExecution ancestor : ancestors) {
+        Map<String, Object> ctx = ancestor.getContext();
+        String ancestorImageId = (String) ctx.get("imageId");
+        if (resourceId.equals(ancestorImageId)) {
+          account =
+              (String) ctx.getOrDefault("account", ctx.get("credentials"));
+          region = (String) ctx.get("region");
+          break;
+        }
+      }
+
+      if (account == null || region == null) {
+        return null;
+      }
+
+      Image targetImage =
+          new Image(imageName, account, Collections.singletonList(region), stageData.tags);
+      targetImages.add(targetImage);
+
+      Map<String, Object> operation = new HashMap<>();
+      operation.put("imageName", imageName);
+      operation.put("imageId", resourceId);
+      operation.put("resourceGroupName", resourceGroup);
+      operation.put("credentials", account);
+      operation.put("region", region);
+      operation.put("regions", Collections.singletonList(region));
+      operation.put("tags", stageData.tags);
+      operation.put("isCustomImage", true);
+      if (isGallery) {
+        operation.put("isGalleryImage", true);
+      }
+
+      operations.add(Collections.singletonMap(OPERATION, operation));
+
+      log.info(
+          "Built {} image operation from upstream stage (imageName: {}, resourceId: {})",
+          isGallery ? "gallery" : "managed",
+          imageName,
+          resourceId);
+    }
+
+    if (operations.isEmpty()) {
+      return null;
+    }
+
+    Map<String, Object> extraOutput = new HashMap<>();
+    extraOutput.put("targets", targetImages);
+    return new OperationContext(operations, extraOutput);
+  }
+
+  private OperationContext buildOperations(
+      Collection<MatchedImage> matchedImages, StageData stageData) {
     List<Image> targetImages = new ArrayList<>();
     List<Map<String, Map>> operations = new ArrayList<>();
 
@@ -113,6 +204,23 @@ public class AzureImageTagger extends ImageTagger {
     }
     // Fallback: return last segment
     return parts[parts.length - 1];
+  }
+
+  static String extractManagedImageName(String resourceId) {
+    if (resourceId == null) return null;
+    String[] parts = resourceId.split("/");
+    return parts[parts.length - 1];
+  }
+
+  static String extractResourceGroup(String resourceId) {
+    if (resourceId == null) return null;
+    String[] parts = resourceId.split("/");
+    for (int i = 0; i < parts.length - 1; i++) {
+      if ("resourceGroups".equalsIgnoreCase(parts[i])) {
+        return parts[i + 1];
+      }
+    }
+    return null;
   }
 
   static boolean isSigResourceId(String resourceId) {
