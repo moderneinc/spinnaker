@@ -30,11 +30,11 @@ public class AzureImageTagger extends ImageTagger {
   protected OperationContext getOperationContext(StageExecution stage) {
     StageData stageData = stage.mapTo(StageData.class);
 
-    // For gallery images, build operations directly from upstream stage data
+    // Build operations directly from upstream stage data when possible
     // to avoid cache lookup delays (newly baked images may not be cached yet)
-    OperationContext galleryContext = buildGalleryOperationsFromUpstream(stage, stageData);
-    if (galleryContext != null) {
-      return galleryContext;
+    OperationContext upstreamContext = buildOperationsFromUpstream(stage, stageData);
+    if (upstreamContext != null) {
+      return upstreamContext;
     }
 
     Collection<MatchedImage> matchedImages =
@@ -47,7 +47,7 @@ public class AzureImageTagger extends ImageTagger {
     return buildOperations(matchedImages, stageData);
   }
 
-  private OperationContext buildGalleryOperationsFromUpstream(
+  private OperationContext buildOperationsFromUpstream(
       StageExecution stage, StageData stageData) {
     Collection<String> rawImageIds =
         super.upstreamImageIds(stage, stageData.consideredStages, getCloudProvider());
@@ -56,20 +56,22 @@ public class AzureImageTagger extends ImageTagger {
       return null;
     }
 
-    // Check if all upstream images are gallery images
-    boolean allGallery = rawImageIds.stream().allMatch(AzureImageTagger::isSigResourceId);
-    if (!allGallery) {
+    // Check if all upstream images are Azure resource IDs
+    boolean allAzureResourceIds =
+        rawImageIds.stream().allMatch(id -> id != null && id.startsWith("/subscriptions/"));
+    if (!allAzureResourceIds) {
       return null;
     }
 
     List<Image> targetImages = new ArrayList<>();
     List<Map<String, Map>> operations = new ArrayList<>();
 
-    // Find the upstream stages to get account and region info
     List<StageExecution> ancestors = stage.ancestors();
 
     for (String resourceId : rawImageIds) {
-      String imageName = extractSigImageName(resourceId);
+      boolean isGallery = isSigResourceId(resourceId);
+      String imageName =
+          isGallery ? extractSigImageName(resourceId) : extractManagedImageName(resourceId);
       String account = null;
       String region = null;
       String resourceGroup = extractResourceGroup(resourceId);
@@ -86,7 +88,6 @@ public class AzureImageTagger extends ImageTagger {
       }
 
       if (account == null || region == null) {
-        // Fall back to cache-based lookup if we can't resolve from upstream
         return null;
       }
 
@@ -103,12 +104,15 @@ public class AzureImageTagger extends ImageTagger {
       operation.put("regions", Collections.singletonList(region));
       operation.put("tags", stageData.tags);
       operation.put("isCustomImage", true);
-      operation.put("isGalleryImage", true);
+      if (isGallery) {
+        operation.put("isGalleryImage", true);
+      }
 
       operations.add(Collections.singletonMap(OPERATION, operation));
 
       log.info(
-          "Built gallery image operation directly from upstream stage (imageName: {}, resourceId: {})",
+          "Built {} image operation from upstream stage (imageName: {}, resourceId: {})",
+          isGallery ? "gallery" : "managed",
           imageName,
           resourceId);
     }
@@ -199,6 +203,12 @@ public class AzureImageTagger extends ImageTagger {
       }
     }
     // Fallback: return last segment
+    return parts[parts.length - 1];
+  }
+
+  static String extractManagedImageName(String resourceId) {
+    if (resourceId == null) return null;
+    String[] parts = resourceId.split("/");
     return parts[parts.length - 1];
   }
 
