@@ -88,9 +88,8 @@ class AzureDeploymentOperation {
 
       if (deploymentIsRunning(deploymentState)) {
         // Add a delay in order to avoid making too many network calls and allow Azure to make some progress on the deployment
-        // log current call to sleep() in order to get a sense of how much the delay should be
         log.info("checkDeploymentOperationStatus -> SLEEP")
-        sleep(500)
+        sleep(10000)
         checkDeployment += 1
       }
       else {
