@@ -429,6 +429,42 @@ public class AzureComputeClient extends AzureBaseClient {
     }
   }
 
+  /**
+   * Update tags on a gallery image version using its resource ID directly
+   * @param resourceId - The full Azure resource ID of the gallery image version
+   * @param tags - The tags to apply
+   * @return true if successful, false otherwise
+   */
+  boolean updateGalleryImageTags(String resourceId, Map<String, String> tags) {
+    try {
+      if (!resourceId) {
+        log.warn("No resource ID provided for gallery image tagging")
+        return false
+      }
+      def resource = executeOp({
+        azure.genericResources().getById(resourceId)
+      })
+      if (!resource) {
+        log.warn("Gallery image not found: ${resourceId}")
+        return false
+      }
+      def currentTags = resource.tags() ?: [:]
+      def newTags = [:] as Map<String, String>
+      newTags.putAll(currentTags)
+      newTags.putAll(tags)
+      executeOp({
+        resource.update()
+          .withTags(newTags)
+          .apply()
+      })
+      log.info("Successfully updated tags for gallery image ${resourceId}")
+      return true
+    } catch (Exception e) {
+      log.error("Failed to update gallery image tags for ${resourceId}", e)
+      return false
+    }
+  }
+
   /***
    * The namespace for the Azure Resource Provider
    * @return namespace of the resource provider

@@ -58,10 +58,8 @@ class UpsertAzureImageTagsAtomicOperation implements AtomicOperation<Void> {
       return
     }
 
-    def success = description.credentials.computeClient.updateCustomImageTags(
+    def success = description.credentials.computeClient.updateGalleryImageTags(
         resourceId,
-        description.imageName,
-        description.resourceGroupName ?: description.appName,
         description.tags
     )
 
