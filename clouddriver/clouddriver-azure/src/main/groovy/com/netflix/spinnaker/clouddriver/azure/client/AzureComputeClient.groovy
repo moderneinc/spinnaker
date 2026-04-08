@@ -442,7 +442,7 @@ public class AzureComputeClient extends AzureBaseClient {
         return false
       }
       def resource = executeOp({
-        azure.genericResources().getById(resourceId)
+        azure.genericResources().getById(resourceId, "2023-07-03")
       })
       if (!resource) {
         log.warn("Gallery image not found: ${resourceId}")
