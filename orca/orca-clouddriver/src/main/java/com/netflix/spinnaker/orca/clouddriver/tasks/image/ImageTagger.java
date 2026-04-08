@@ -89,6 +89,7 @@ public abstract class ImageTagger {
         Map<String, String> additionalFilters = new HashMap<>();
         if ("azure".equals(getCloudProvider())) {
           additionalFilters.put("managedImages", "true");
+          additionalFilters.put("galleryImages", "true");
         }
         List<Map> allMatchedImages =
             Retrofit2SyncCall.execute(
@@ -113,6 +114,7 @@ public abstract class ImageTagger {
       Map<String, String> additionalFilters = new HashMap<>();
       if ("azure".equals(getCloudProvider())) {
         additionalFilters.put("managedImages", "true");
+        additionalFilters.put("galleryImages", "true");
       }
       List<Map> allMatchedImages =
           Retrofit2SyncCall.execute(
