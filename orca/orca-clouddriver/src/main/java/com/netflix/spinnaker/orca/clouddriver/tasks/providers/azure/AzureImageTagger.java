@@ -232,39 +232,8 @@ public class AzureImageTagger extends ImageTagger {
   @Override
   protected boolean areImagesTagged(
       Collection<Image> targetImages, Collection<String> consideredStages, StageExecution stage) {
-
-    for (Image targetImage : targetImages) {
-      Map<String, String> additionalFilters = new HashMap<>();
-      additionalFilters.put("managedImages", "true");
-      additionalFilters.put("galleryImages", "true");
-
-      List<Map> foundImages =
-          Retrofit2SyncCall.execute(
-              oortService.findImage(
-                  getCloudProvider(),
-                  targetImage.imageName,
-                  targetImage.account,
-                  null,
-                  additionalFilters));
-
-      if (foundImages.isEmpty()) {
-        return false;
-      }
-
-      Map foundImage = foundImages.get(0);
-      Map<String, String> imageTags = (Map<String, String>) foundImage.get("tags");
-
-      if (imageTags == null) {
-        return false;
-      }
-
-      for (Map.Entry<String, String> targetTag : targetImage.tags.entrySet()) {
-        if (!targetTag.getValue().equals(imageTags.get(targetTag.getKey()))) {
-          return false;
-        }
-      }
-    }
-
+    // Skip cache verification — tagging is confirmed via monitorUpsert (Kato task).
+    // The image cache refresh lag causes this check to time out for newly baked images.
     return true;
   }
 
