@@ -214,12 +214,14 @@ class AzureResourceManagerClient extends AzureBaseClient {
     Map<String, Object> templateParameters) {
     try {
       String parameters = AzureUtilities.convertParametersToTemplateJSON(mapper, templateParameters)
-      return azure.deployments().define(deploymentName)
-        .withExistingResourceGroup(resourceGroupName)
-        .withTemplate(template)
-        .withParameters(parameters)
-        .withMode(deploymentMode)
-        .create()
+      return executeOp({
+        azure.deployments().define(deploymentName)
+          .withExistingResourceGroup(resourceGroupName)
+          .withTemplate(template)
+          .withParameters(parameters)
+          .withMode(deploymentMode)
+          .create()
+      })
     } catch (Throwable e) {
       log.error("Exception occured during deployment ${e.message}")
       throw e

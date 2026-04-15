@@ -302,24 +302,27 @@ class AzureNetworkClient extends AzureBaseClient {
   void enableServerGroupWithAppGateway(String resourceGroupName, String appGatewayResourceGroupName, String appGatewayName, String serverGroupName, String backendPoolName) {
     if (!backendPoolName) return
     def poolId = buildAppGatewayPoolId(appGatewayResourceGroupName, appGatewayName, backendPoolName)
-    def vmss = requireVmss(resourceGroupName, serverGroupName)
-    def ipConfig = getPrimaryIpConfig(vmss)
 
-    def pools = ipConfig.applicationGatewayBackendAddressPools() ?: []
-    if (!pools.any { it.id()?.equalsIgnoreCase(poolId) }) {
-      pools = new ArrayList<>(pools)
-      pools.add(new SubResource().withId(poolId))
-      ipConfig.withApplicationGatewayBackendAddressPools(pools)
-      vmss.update().apply()
-      log.info("Added AG backend pool to VMSS ${vmss.name()}")
-    }
+    executeOp({
+      def vmss = azure.virtualMachineScaleSets().getByResourceGroup(resourceGroupName, serverGroupName)
+      if (!vmss) throw new RuntimeException("VMSS ${serverGroupName} not found in ${resourceGroupName}")
+      def ipConfig = getPrimaryIpConfig(vmss)
+      def pools = ipConfig.applicationGatewayBackendAddressPools() ?: []
+      if (!pools.any { it.id()?.equalsIgnoreCase(poolId) }) {
+        pools = new ArrayList<>(pools)
+        pools.add(new SubResource().withId(poolId))
+        ipConfig.withApplicationGatewayBackendAddressPools(pools)
+        vmss.update().apply()
+        log.info("Added AG backend pool to VMSS ${vmss.name()}")
+      }
+    })
 
     // Tag the App Gateway with the active server group for debugging
     def appGateway = executeOp({
       azure.applicationGateways().getByResourceGroup(appGatewayResourceGroupName, appGatewayName)
     })
     if (appGateway) {
-      appGateway.update().withTag("trafficEnabledSG", serverGroupName).apply()
+      executeOp({ appGateway.update().withTag("trafficEnabledSG", serverGroupName).apply() })
     }
   }
 
@@ -329,24 +332,27 @@ class AzureNetworkClient extends AzureBaseClient {
   void disableServerGroup(String resourceGroupName, String appGatewayResourceGroupName, String appGatewayName, String serverGroupName, String backendPoolName) {
     if (!backendPoolName) return
     def poolId = buildAppGatewayPoolId(appGatewayResourceGroupName, appGatewayName, backendPoolName)
-    def vmss = requireVmss(resourceGroupName, serverGroupName)
-    def ipConfig = getPrimaryIpConfig(vmss)
 
-    def pools = ipConfig.applicationGatewayBackendAddressPools()
-    if (pools) {
-      def updatedPools = pools.findAll { !it.id()?.equalsIgnoreCase(poolId) }
-      if (updatedPools.size() < pools.size()) {
-        ipConfig.withApplicationGatewayBackendAddressPools(updatedPools)
-        vmss.update().apply()
-        log.info("Removed AG backend pool from VMSS ${vmss.name()}")
+    executeOp({
+      def vmss = azure.virtualMachineScaleSets().getByResourceGroup(resourceGroupName, serverGroupName)
+      if (!vmss) throw new RuntimeException("VMSS ${serverGroupName} not found in ${resourceGroupName}")
+      def ipConfig = getPrimaryIpConfig(vmss)
+      def pools = ipConfig.applicationGatewayBackendAddressPools()
+      if (pools) {
+        def updatedPools = pools.findAll { !it.id()?.equalsIgnoreCase(poolId) }
+        if (updatedPools.size() < pools.size()) {
+          ipConfig.withApplicationGatewayBackendAddressPools(updatedPools)
+          vmss.update().apply()
+          log.info("Removed AG backend pool from VMSS ${vmss.name()}")
+        }
       }
-    }
+    })
 
     def appGateway = executeOp({
       azure.applicationGateways().getByResourceGroup(appGatewayResourceGroupName, appGatewayName)
     })
     if (appGateway) {
-      appGateway.update().withoutTag("trafficEnabledSG").apply()
+      executeOp({ appGateway.update().withoutTag("trafficEnabledSG").apply() })
     }
   }
 
@@ -389,17 +395,20 @@ class AzureNetworkClient extends AzureBaseClient {
   void enableServerGroupWithLoadBalancer(String resourceGroupName, String loadBalancerName, String serverGroupName, String backendPoolName) {
     if (!backendPoolName) return
     def poolId = buildLoadBalancerPoolId(resourceGroupName, loadBalancerName, backendPoolName)
-    def vmss = requireVmss(resourceGroupName, serverGroupName)
-    def ipConfig = getPrimaryIpConfig(vmss)
 
-    def pools = ipConfig.loadBalancerBackendAddressPools() ?: []
-    if (!pools.any { it.id()?.equalsIgnoreCase(poolId) }) {
-      pools = new ArrayList<>(pools)
-      pools.add(new SubResource().withId(poolId))
-      ipConfig.withLoadBalancerBackendAddressPools(pools)
-      vmss.update().apply()
-      log.info("Added LB backend pool to VMSS ${vmss.name()}")
-    }
+    executeOp({
+      def vmss = azure.virtualMachineScaleSets().getByResourceGroup(resourceGroupName, serverGroupName)
+      if (!vmss) throw new RuntimeException("VMSS ${serverGroupName} not found in ${resourceGroupName}")
+      def ipConfig = getPrimaryIpConfig(vmss)
+      def pools = ipConfig.loadBalancerBackendAddressPools() ?: []
+      if (!pools.any { it.id()?.equalsIgnoreCase(poolId) }) {
+        pools = new ArrayList<>(pools)
+        pools.add(new SubResource().withId(poolId))
+        ipConfig.withLoadBalancerBackendAddressPools(pools)
+        vmss.update().apply()
+        log.info("Added LB backend pool to VMSS ${vmss.name()}")
+      }
+    })
   }
 
   /**
@@ -408,18 +417,21 @@ class AzureNetworkClient extends AzureBaseClient {
   void disableServerGroupWithLoadBalancer(String resourceGroupName, String loadBalancerName, String serverGroupName, String backendPoolName) {
     if (!backendPoolName) return
     def poolId = buildLoadBalancerPoolId(resourceGroupName, loadBalancerName, backendPoolName)
-    def vmss = requireVmss(resourceGroupName, serverGroupName)
-    def ipConfig = getPrimaryIpConfig(vmss)
 
-    def pools = ipConfig.loadBalancerBackendAddressPools()
-    if (pools) {
-      def updatedPools = pools.findAll { !it.id()?.equalsIgnoreCase(poolId) }
-      if (updatedPools.size() < pools.size()) {
-        ipConfig.withLoadBalancerBackendAddressPools(updatedPools)
-        vmss.update().apply()
-        log.info("Removed LB backend pool from VMSS ${vmss.name()}")
+    executeOp({
+      def vmss = azure.virtualMachineScaleSets().getByResourceGroup(resourceGroupName, serverGroupName)
+      if (!vmss) throw new RuntimeException("VMSS ${serverGroupName} not found in ${resourceGroupName}")
+      def ipConfig = getPrimaryIpConfig(vmss)
+      def pools = ipConfig.loadBalancerBackendAddressPools()
+      if (pools) {
+        def updatedPools = pools.findAll { !it.id()?.equalsIgnoreCase(poolId) }
+        if (updatedPools.size() < pools.size()) {
+          ipConfig.withLoadBalancerBackendAddressPools(updatedPools)
+          vmss.update().apply()
+          log.info("Removed LB backend pool from VMSS ${vmss.name()}")
+        }
       }
-    }
+    })
   }
 
   /**
