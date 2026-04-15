@@ -40,7 +40,7 @@ import java.time.Duration
 @CompileStatic
 abstract class AzureBaseClient {
   final String subscriptionId
-  final static long AZURE_ATOMICOPERATION_RETRY = 5
+  final static long AZURE_ATOMICOPERATION_RETRY = 15
   final static int HTTP_TOO_MANY_REQUESTS = 429
   final static int DEFAULT_429_RETRY_INTERVAL_SEC = 30
   final static int MAX_429_RETRY_INTERVAL_SEC = 120
@@ -69,7 +69,7 @@ abstract class AzureBaseClient {
     ).build()
 
     def retryPolicy = new RetryPolicy(
-      new ExponentialBackoff(5, Duration.ofSeconds(2), Duration.ofSeconds(60))
+      new ExponentialBackoff(8, Duration.ofSeconds(5), Duration.ofSeconds(120))
     )
 
     AzureResourceManager

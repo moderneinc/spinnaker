@@ -49,7 +49,7 @@ class DisableAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
     def region = description.region
     if (description.serverGroupName) description.name = description.serverGroupName
     if (!description.application) description.application = description.appName ?: Names.parseName(description.name).app
-    task.updateStatus BASE_PHASE, "Disablinging server group ${description.name} " + "in ${region}..."
+    task.updateStatus BASE_PHASE, "Disabling server group ${description.name} in ${region}..."
 
     if (!description.credentials) {
       throw new IllegalArgumentException("Unable to resolve credentials for the selected Azure account.")
@@ -98,10 +98,7 @@ class DisableAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
   }
 
   private void disableServerGroupWithoutLoadBalancers(String resourceGroupName, AzureServerGroupDescription serverGroupDescription, region) {
-    if (description
-      .credentials
-      .networkClient
-      .isServerGroupWithoutLoadBalancerDisabled(resourceGroupName, serverGroupDescription.name)) {
+    if (serverGroupDescription.disabled) {
       task.updateStatus BASE_PHASE, "Azure server group ${serverGroupDescription.name} in ${region} is already disabled."
     } else {
       // there is no concept of a "disabled" server group without a load balancer, so scale to 0
@@ -115,10 +112,10 @@ class DisableAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
   }
 
   private void disableServerGroupWithApplicationGateway(String resourceGroupName, AzureServerGroupDescription serverGroupDescription, region) {
-    String loadBalancerRG = serverGroupDescription.loadBalancerResourceGroup ?: resourceGroupName
-    if (description.credentials.networkClient.isServerGroupWithAppGatewayDisabled(resourceGroupName, loadBalancerRG, serverGroupDescription.appGatewayName, serverGroupDescription.name, serverGroupDescription.backendPoolName)) {
+    if (serverGroupDescription.disabled) {
       task.updateStatus BASE_PHASE, "Azure server group ${serverGroupDescription.name} in ${region} is already disabled."
     } else {
+      String loadBalancerRG = serverGroupDescription.loadBalancerResourceGroup ?: resourceGroupName
       description
         .credentials
         .networkClient
@@ -129,7 +126,7 @@ class DisableAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
   }
 
   private void disableServerGroupWithLoadBalancer(String resourceGroupName, AzureServerGroupDescription serverGroupDescription, region) {
-    if (description.credentials.networkClient.isServerGroupWithLoadBalancerDisabled(resourceGroupName, serverGroupDescription.loadBalancerName, serverGroupDescription.name, serverGroupDescription.backendPoolName)) {
+    if (serverGroupDescription.disabled) {
       task.updateStatus BASE_PHASE, "Azure server group ${serverGroupDescription.name} in ${region} is already disabled."
     } else {
       description
