@@ -49,7 +49,7 @@ class EnableAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
     def region = description.region
     if (description.serverGroupName) description.name = description.serverGroupName
     if (!description.application) description.application = description.appName ?: Names.parseName(description.name).app
-    task.updateStatus BASE_PHASE, "Enabling server group ${description.name} " + "in ${region}..."
+    task.updateStatus BASE_PHASE, "Enabling server group ${description.name} in ${region}..."
 
     if (!description.credentials) {
       throw new IllegalArgumentException("Unable to resolve credentials for the selected Azure account.")
@@ -66,29 +66,23 @@ class EnableAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
         errList.add("could not find server group ${description.name} in ${region}")
       } else {
         try {
-          if (serverGroupDescription.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_LOAD_BALANCER.toString()) {
-            if (description.credentials.networkClient.isServerGroupWithLoadBalancerDisabled(resourceGroupName, serverGroupDescription.loadBalancerName, serverGroupDescription.name, serverGroupDescription.backendPoolName)) {
-              description
-                .credentials
-                .networkClient
-                .enableServerGroupWithLoadBalancer(resourceGroupName, serverGroupDescription.loadBalancerName, serverGroupDescription.name, serverGroupDescription.backendPoolName)
+          if (!serverGroupDescription.disabled) {
+            task.updateStatus BASE_PHASE, "Azure server group ${serverGroupDescription.name} in ${region} is already enabled."
+          } else if (serverGroupDescription.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_LOAD_BALANCER.toString()) {
+            description
+              .credentials
+              .networkClient
+              .enableServerGroupWithLoadBalancer(resourceGroupName, serverGroupDescription.loadBalancerName, serverGroupDescription.name, serverGroupDescription.backendPoolName)
 
-              waitForHealthy(resourceGroupName, serverGroupDescription, region, errList)
-            } else {
-              task.updateStatus BASE_PHASE, "Azure server group ${serverGroupDescription.name} in ${region} is already enabled."
-            }
+            waitForHealthy(resourceGroupName, serverGroupDescription, region, errList)
           } else if (serverGroupDescription.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()) {
             String loadBalancerRG = serverGroupDescription.loadBalancerResourceGroup ?: resourceGroupName
-            if (description.credentials.networkClient.isServerGroupWithAppGatewayDisabled(resourceGroupName, loadBalancerRG, serverGroupDescription.appGatewayName, serverGroupDescription.name, serverGroupDescription.backendPoolName)) {
-              description
-                .credentials
-                .networkClient
-                .enableServerGroupWithAppGateway(resourceGroupName, loadBalancerRG, serverGroupDescription.appGatewayName, serverGroupDescription.name, serverGroupDescription.backendPoolName)
+            description
+              .credentials
+              .networkClient
+              .enableServerGroupWithAppGateway(resourceGroupName, loadBalancerRG, serverGroupDescription.appGatewayName, serverGroupDescription.name, serverGroupDescription.backendPoolName)
 
-              waitForHealthy(resourceGroupName, serverGroupDescription, region, errList)
-            } else {
-              task.updateStatus BASE_PHASE, "Azure server group ${serverGroupDescription.name} in ${region} is already enabled."
-            }
+            waitForHealthy(resourceGroupName, serverGroupDescription, region, errList)
           } else {
             throw new RuntimeException("Azure server group with load balancer type $serverGroupDescription.loadBalancerType cannot be enabled.")
           }
