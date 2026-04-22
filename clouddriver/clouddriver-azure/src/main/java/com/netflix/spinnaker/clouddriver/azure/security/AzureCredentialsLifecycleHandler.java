@@ -27,6 +27,7 @@ import com.netflix.spinnaker.clouddriver.azure.resources.securitygroup.cache.Azu
 import com.netflix.spinnaker.clouddriver.azure.resources.servergroup.cache.AzureServerGroupCachingAgent;
 import com.netflix.spinnaker.clouddriver.azure.resources.subnet.cache.AzureSubnetCachingAgent;
 import com.netflix.spinnaker.clouddriver.azure.resources.vmimage.cache.AzureCustomImageCachingAgent;
+import com.netflix.spinnaker.clouddriver.azure.resources.vmimage.cache.AzureGalleryImageCachingAgent;
 import com.netflix.spinnaker.clouddriver.azure.resources.vmimage.cache.AzureManagedImageCachingAgent;
 import com.netflix.spinnaker.clouddriver.azure.resources.vmimage.cache.AzureVMImageCachingAgent;
 import com.netflix.spinnaker.clouddriver.security.AccountCredentialsProvider;
@@ -114,6 +115,10 @@ public class AzureCredentialsLifecycleHandler
 
               agents.add(
                   new AzureManagedImageCachingAgent(
+                      azureCloudProvider, accountName, creds, regionName, objectMapper));
+
+              agents.add(
+                  new AzureGalleryImageCachingAgent(
                       azureCloudProvider, accountName, creds, regionName, objectMapper));
             });
 
