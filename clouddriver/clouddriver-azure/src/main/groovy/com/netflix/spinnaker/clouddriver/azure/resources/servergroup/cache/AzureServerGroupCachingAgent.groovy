@@ -47,8 +47,12 @@ import static com.netflix.spinnaker.cats.agent.AgentDataType.Authority.INFORMATI
 @Slf4j
 class AzureServerGroupCachingAgent extends AzureCachingAgent {
 
+  private static final int SUSPICIOUS_POLL_THRESHOLD = 2
+
   final Registry registry
   final OnDemandMetricsSupport metricsSupport
+
+  private int consecutiveSuspiciousPolls = 0
 
   AzureServerGroupCachingAgent(AzureCloudProvider azureCloudProvider, String accountName, AzureCredentials creds, String region, ObjectMapper objectMapper, Registry registry) {
     super(azureCloudProvider, accountName, creds, region, objectMapper)
@@ -81,9 +85,50 @@ class AzureServerGroupCachingAgent extends AzureCachingAgent {
       it.attributes.processedCount = (it.attributes.processedCount ?: 0) + 1
     }
 
-    removeDeadCacheEntries(result, providerCache)
+    if (freshDataLooksComplete(serverGroups, cacheResults[AZURE_SERVER_GROUPS.ns], providerCache)) {
+      removeDeadCacheEntries(result, providerCache)
+    }
 
     result
+  }
+
+  private boolean freshDataLooksComplete(List<AzureServerGroupDescription> serverGroups,
+                                         Collection<CacheData> cachedServerGroups,
+                                         ProviderCache providerCache) {
+    String suspicion = detectSuspicion(serverGroups, cachedServerGroups, providerCache)
+    if (!suspicion) {
+      consecutiveSuspiciousPolls = 0
+      return true
+    }
+
+    consecutiveSuspiciousPolls = Math.min(consecutiveSuspiciousPolls + 1, SUSPICIOUS_POLL_THRESHOLD)
+    if (consecutiveSuspiciousPolls < SUSPICIOUS_POLL_THRESHOLD) {
+      log.warn("Suspicious fresh data in ${agentType} (${suspicion}); skipping eviction sweep (${consecutiveSuspiciousPolls}/${SUSPICIOUS_POLL_THRESHOLD})")
+      return false
+    }
+    log.warn("Suspicious fresh data persists past threshold in ${agentType} (${suspicion}); accepting as authoritative and allowing eviction")
+    true
+  }
+
+  private String detectSuspicion(List<AzureServerGroupDescription> serverGroups,
+                                 Collection<CacheData> cachedServerGroups,
+                                 ProviderCache providerCache) {
+    if (serverGroups.isEmpty()) {
+      def existing = providerCache.filterIdentifiers(
+        AZURE_SERVER_GROUPS.ns,
+        Keys.getServerGroupKey(AzureCloudProvider.ID, "*", region, accountName)
+      )
+      return existing ? "fresh list returned 0 server groups but cache has ${existing.size()}" : null
+    }
+
+    def mismatch = serverGroups.find { sg ->
+      def desiredCapacity = sg.sku?.capacity ?: 0L
+      if (desiredCapacity <= 0) return false
+      def sgKey = Keys.getServerGroupKey(AzureCloudProvider.ID, sg.name, region, accountName)
+      def entry = cachedServerGroups?.find { it.id == sgKey }
+      !entry?.relationships?.get(AZURE_INSTANCES.ns)
+    }
+    mismatch ? "server group ${mismatch.name} reports capacity ${mismatch.sku?.capacity} but fresh fetch returned 0 instances" : null
   }
 
   CacheResult removeDeadCacheEntries(CacheResult cacheResult, ProviderCache providerCache) {
@@ -99,6 +144,7 @@ class AzureServerGroupCachingAgent extends AzureCachingAgent {
     }
     evictedSGList.removeAll(Collections.singleton(null))
     if (evictedSGList) {
+      log.info("Evicting ${evictedSGList.size()} server group(s) from cache in ${agentType}: ${evictedSGList}")
       cacheResult.evictions[AZURE_SERVER_GROUPS.ns] = evictedSGList
     }
 
@@ -114,6 +160,7 @@ class AzureServerGroupCachingAgent extends AzureCachingAgent {
     }
     evictedInstanceList.removeAll(Collections.singleton(null))
     if (evictedInstanceList) {
+      log.info("Evicting ${evictedInstanceList.size()} instance(s) from cache in ${agentType}: ${evictedInstanceList}")
       cacheResult.evictions[AZURE_INSTANCES.ns] = evictedInstanceList
     }
 
@@ -138,6 +185,7 @@ class AzureServerGroupCachingAgent extends AzureCachingAgent {
 
     evictedClusterList.removeAll(Collections.singleton(null))
     if (evictedClusterList) {
+      log.info("Evicting ${evictedClusterList.size()} cluster(s) from cache in ${agentType}: ${evictedClusterList}")
       cacheResult.evictions[AZURE_CLUSTERS.ns] = evictedClusterList
     }
 
