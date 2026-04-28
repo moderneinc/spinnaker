@@ -64,15 +64,34 @@ public class ArtifactUtils {
   private final ObjectMapper objectMapper;
   private final ExecutionRepository executionRepository;
   private final ContextParameterProcessor contextParameterProcessor;
+  private final DockerLatestResolutionService dockerLatestResolutionService;
 
   @Autowired
   public ArtifactUtils(
       ObjectMapper objectMapper,
       ExecutionRepository executionRepository,
-      ContextParameterProcessor contextParameterProcessor) {
+      ContextParameterProcessor contextParameterProcessor,
+      DockerLatestResolutionService dockerLatestResolutionService) {
     this.objectMapper = objectMapper;
     this.executionRepository = executionRepository;
     this.contextParameterProcessor = contextParameterProcessor;
+    this.dockerLatestResolutionService = dockerLatestResolutionService;
+  }
+
+  /**
+   * Convenience constructor for tests and legacy callers; uses a no-op {@link
+   * DockerLatestResolutionService} (no resolvers registered, so docker/image:latest artifacts
+   * pass through unchanged).
+   */
+  public ArtifactUtils(
+      ObjectMapper objectMapper,
+      ExecutionRepository executionRepository,
+      ContextParameterProcessor contextParameterProcessor) {
+    this(
+        objectMapper,
+        executionRepository,
+        contextParameterProcessor,
+        new DockerLatestResolutionService(null));
   }
 
   public List<Artifact> getArtifacts(StageExecution stage) {
@@ -234,6 +253,7 @@ public class ArtifactUtils {
                 () -> getPriorArtifacts(pipeline),
                 /* requireUniqueMatches= */ true)
             .resolveExpectedArtifacts(expectedArtifacts);
+    resolveResult = dockerLatestResolutionService.canonicalize(resolveResult);
 
     ImmutableSet<Artifact> allArtifacts =
         ImmutableSet.<Artifact>builder()

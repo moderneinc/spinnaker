@@ -166,6 +166,15 @@ public interface OortService {
       @Query("region") String region,
       @QueryMap Map<String, String> additionalFilters);
 
+  /**
+   * Resolves a docker image reference whose tag is a moving alias (e.g. {@code latest}) to its
+   * canonical pinned semver tag in ECR. The {@code reference} parameter is the full image URI,
+   * including the registry, repository, and current tag. The response carries the resolved tag and
+   * a fully-qualified reference with that tag substituted in.
+   */
+  @GET("ecs/images/resolveDockerTag")
+  Call<Map<String, String>> resolveDockerTag(@Query("reference") String reference);
+
   @GET("tags")
   Call<List<Map<String, Object>>> getEntityTags(
       @Query("cloudProvider") String cloudProvider,
