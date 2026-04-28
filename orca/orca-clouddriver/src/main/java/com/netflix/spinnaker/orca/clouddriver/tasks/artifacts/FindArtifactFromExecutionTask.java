@@ -26,20 +26,34 @@ import com.netflix.spinnaker.orca.api.pipeline.models.ExecutionStatus;
 import com.netflix.spinnaker.orca.api.pipeline.models.StageExecution;
 import com.netflix.spinnaker.orca.pipeline.util.ArtifactResolver;
 import com.netflix.spinnaker.orca.pipeline.util.ArtifactUtils;
+import com.netflix.spinnaker.orca.pipeline.util.DockerLatestResolutionService;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import javax.annotation.Nonnull;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
-@RequiredArgsConstructor
 public class FindArtifactFromExecutionTask implements Task {
   public static final String TASK_NAME = "findArtifactFromExecution";
 
   private final ArtifactUtils artifactUtils;
+  private final DockerLatestResolutionService dockerLatestResolutionService;
+
+  @Autowired
+  public FindArtifactFromExecutionTask(
+      ArtifactUtils artifactUtils,
+      DockerLatestResolutionService dockerLatestResolutionService) {
+    this.artifactUtils = artifactUtils;
+    this.dockerLatestResolutionService = dockerLatestResolutionService;
+  }
+
+  /** Convenience constructor for tests/legacy callers; uses a no-op resolution service. */
+  public FindArtifactFromExecutionTask(ArtifactUtils artifactUtils) {
+    this(artifactUtils, new DockerLatestResolutionService(null));
+  }
 
   @Nonnull
   @Override
@@ -68,6 +82,7 @@ public class FindArtifactFromExecutionTask implements Task {
     ArtifactResolver.ResolveResult resolveResult =
         ArtifactResolver.getInstance(priorArtifacts, /* requireUniqueMatches= */ false)
             .resolveExpectedArtifacts(expectedArtifacts);
+    resolveResult = dockerLatestResolutionService.canonicalize(resolveResult);
 
     outputs.put("resolvedExpectedArtifacts", resolveResult.getResolvedExpectedArtifacts());
     outputs.put("artifacts", resolveResult.getResolvedArtifacts());

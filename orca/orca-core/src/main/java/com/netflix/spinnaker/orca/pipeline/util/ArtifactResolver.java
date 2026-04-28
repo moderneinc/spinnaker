@@ -185,5 +185,11 @@ public final class ArtifactResolver {
      * to the artifact that it matched during resolution.
      */
     private final ImmutableList<ExpectedArtifact> resolvedExpectedArtifacts;
+
+    public static ResolveResult create(
+        ImmutableList<Artifact> resolvedArtifacts,
+        ImmutableList<ExpectedArtifact> resolvedExpectedArtifacts) {
+      return new ResolveResult(resolvedArtifacts, resolvedExpectedArtifacts);
+    }
   }
 }

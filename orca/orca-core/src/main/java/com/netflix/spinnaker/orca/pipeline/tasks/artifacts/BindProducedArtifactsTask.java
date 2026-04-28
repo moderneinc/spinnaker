@@ -29,6 +29,7 @@ import com.netflix.spinnaker.orca.config.TaskConfigurationProperties;
 import com.netflix.spinnaker.orca.config.TaskConfigurationProperties.BindProducedArtifactsTaskConfig;
 import com.netflix.spinnaker.orca.pipeline.util.ArtifactResolver;
 import com.netflix.spinnaker.orca.pipeline.util.ArtifactUtils;
+import com.netflix.spinnaker.orca.pipeline.util.DockerLatestResolutionService;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,16 +45,27 @@ public class BindProducedArtifactsTask implements Task {
   private final ArtifactUtils artifactUtils;
   private final ObjectMapper objectMapper;
   private final BindProducedArtifactsTaskConfig configProperties;
+  private final DockerLatestResolutionService dockerLatestResolutionService;
 
   @Autowired
   public BindProducedArtifactsTask(
       ArtifactUtils artifactUtils,
       ObjectMapper objectMapper,
-      TaskConfigurationProperties configProperties) {
+      TaskConfigurationProperties configProperties,
+      DockerLatestResolutionService dockerLatestResolutionService) {
     this.artifactUtils = artifactUtils;
     this.objectMapper = objectMapper;
     this.configProperties = configProperties.getBindProducedArtifactsTask();
+    this.dockerLatestResolutionService = dockerLatestResolutionService;
     log.info("output keys to filter: {}", this.configProperties.getExcludeKeysFromOutputs());
+  }
+
+  /** Convenience constructor for tests and legacy callers; uses a no-op resolution service. */
+  public BindProducedArtifactsTask(
+      ArtifactUtils artifactUtils,
+      ObjectMapper objectMapper,
+      TaskConfigurationProperties configProperties) {
+    this(artifactUtils, objectMapper, configProperties, new DockerLatestResolutionService(null));
   }
 
   @Nonnull
@@ -74,6 +86,7 @@ public class BindProducedArtifactsTask implements Task {
     ArtifactResolver.ResolveResult resolveResult =
         ArtifactResolver.getInstance(artifacts, /* requireUniqueMatches= */ false)
             .resolveExpectedArtifacts(expectedArtifacts);
+    resolveResult = dockerLatestResolutionService.canonicalize(resolveResult);
 
     outputs.put("artifacts", resolveResult.getResolvedArtifacts());
     outputs.put("resolvedExpectedArtifacts", resolveResult.getResolvedExpectedArtifacts());
