@@ -46,15 +46,13 @@ public class AzureImageFinder implements ImageFinder {
         regions,
         account);
 
-    // Deploys consume Shared Image Gallery versions exclusively: bake produces
-    // a managed image in a single bake region, then a replication step
-    // publishes gallery image versions into every deploy region. Asking the
-    // controller for managed images here would either return nothing (in
-    // regions the bake doesn't touch) or collide with gallery results on
-    // lexicographic name compare. Hard-coding gallery-only sidesteps both.
+    // Image-source flags inherit their LookupOptions defaults on the
+    // controller side: managedImages=false, galleryImages=true. Deploys
+    // consume Shared Image Gallery versions exclusively (bake produces a
+    // managed image in a single region, replication publishes gallery
+    // versions everywhere else), so the defaults already express what we
+    // want -- no need to set either flag here.
     Map<String, String> searchParams = new HashMap<>(prefixTags(tags));
-    searchParams.put("managedImages", "false");
-    searchParams.put("galleryImages", "true");
 
     List<AzureManagedImage> allMatchedImages =
         Retrofit2SyncCall.execute(

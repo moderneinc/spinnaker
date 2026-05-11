@@ -599,6 +599,10 @@ class AzureVMImageLookupControllerTest {
     lookupOptions.setManagedImages(managedImage);
     lookupOptions.setCustomOnly(customOnly);
     lookupOptions.setConfigOnly(configOnly);
+    // These pre-gallery tests assert against a fixed set of namespaces; pin
+    // galleryImages=false so the now-true LookupOptions default doesn't add
+    // an extra gallery-cache lookup that they aren't expecting.
+    lookupOptions.setGalleryImages(false);
     return lookupOptions;
   }
 
@@ -770,14 +774,16 @@ class AzureVMImageLookupControllerTest {
 
   @Test
   @DisplayName(
-      "findImagesByTags with managedImages=true alone skips the gallery cache (callers can pin a source)")
+      "findImagesByTags with managedImages=true and galleryImages=false searches only managed")
   void findImagesByTagsRespectsManagedOnly() {
     // prepare
     LookupOptions lookupOptions = new LookupOptions();
     lookupOptions.setAccount(AZURE_ACCOUNT);
     lookupOptions.setRegion(REGION);
     lookupOptions.setManagedImages(true);
-    // galleryImages stays false -- caller explicitly wants managed only
+    // galleryImages defaults to true, so callers wanting managed-only must
+    // override it explicitly.
+    lookupOptions.setGalleryImages(false);
     lookupOptions.setTags(Map.of("appversion", "1.0.0"));
 
     String managedKey =
@@ -878,21 +884,14 @@ class AzureVMImageLookupControllerTest {
 
   @Test
   @DisplayName(
-      "findImagesByTags with neither flag set still searches both (backward compat for legacy callers)")
-  void findImagesByTagsDefaultsToBothWhenNoFlagSet() {
-    // prepare
+      "findImagesByTags with neither flag set inherits LookupOptions defaults (gallery-only)")
+  void findImagesByTagsDefaultsToGalleryOnly() {
+    // prepare -- caller sets neither flag; defaults apply (managed=false, gallery=true)
     LookupOptions lookupOptions = new LookupOptions();
     lookupOptions.setAccount(AZURE_ACCOUNT);
     lookupOptions.setRegion(REGION);
-    // neither managedImages nor galleryImages set -- existing callers
     lookupOptions.setTags(Map.of("appversion", "1.0.0"));
 
-    given(cache.filterIdentifiers(eq(Keys.Namespace.AZURE_MANAGEDIMAGES.getNs()), anyString()))
-        .willReturn(List.of());
-    given(
-            cache.getAll(
-                eq(Keys.Namespace.AZURE_MANAGEDIMAGES.getNs()), anyList(), any(CacheFilter.class)))
-        .willReturn(List.of());
     given(cache.filterIdentifiers(eq(Keys.Namespace.AZURE_GALLERYIMAGES.getNs()), anyString()))
         .willReturn(List.of());
     given(
@@ -903,10 +902,10 @@ class AzureVMImageLookupControllerTest {
     // act
     lookupController.list(lookupOptions, Map.of("tag:appversion", "1.0.0"));
 
-    // assert: both caches were consulted (backward compat)
-    verify(cache, times(1))
-        .filterIdentifiers(eq(Keys.Namespace.AZURE_MANAGEDIMAGES.getNs()), anyString());
+    // assert: gallery cache consulted, managed cache untouched
     verify(cache, times(1))
         .filterIdentifiers(eq(Keys.Namespace.AZURE_GALLERYIMAGES.getNs()), anyString());
+    verify(cache, never())
+        .filterIdentifiers(eq(Keys.Namespace.AZURE_MANAGEDIMAGES.getNs()), anyString());
   }
 }

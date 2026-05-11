@@ -359,16 +359,9 @@ class AzureVMImageLookupController {
   List<AzureNamedImage> findImagesByTags(LookupOptions lookupOptions) {
     def results = [] as List<AzureNamedImage>
 
-    // If the caller explicitly asked for one source (managedImages=true OR
-    // galleryImages=true), respect that. If both flags are false/null (legacy
-    // callers that don't set either), search both -- this preserves the
-    // historical "tags imply both sources" behavior so this change is a no-op
-    // until a caller opts in.
-    boolean anyExplicit = lookupOptions.managedImages || lookupOptions.galleryImages
-    boolean searchManaged = anyExplicit ? lookupOptions.managedImages : true
-    boolean searchGallery = anyExplicit ? lookupOptions.galleryImages : true
-
-    if (searchManaged) {
+    // Honor the LookupOptions flags directly. Defaults are managedImages=false
+    // and galleryImages=true, so a caller that sets neither gets gallery-only.
+    if (lookupOptions.managedImages) {
       def pattern = Keys.getManagedVMImageKey(azureCloudProvider,
         lookupOptions.account ?: '*',
         lookupOptions.region ?: '*',
@@ -395,7 +388,7 @@ class AzureVMImageLookupController {
       }
     }
 
-    if (searchGallery && results.size() < MAX_SEARCH_RESULTS) {
+    if (lookupOptions.galleryImages && results.size() < MAX_SEARCH_RESULTS) {
       def galleryPattern = Keys.getGalleryImageKey(azureCloudProvider,
         lookupOptions.account ?: '*',
         lookupOptions.region ?: '*',
@@ -529,7 +522,12 @@ class AzureVMImageLookupController {
     Boolean configOnly = true
     Boolean customOnly = false
     Boolean managedImages = false
-    Boolean galleryImages = false
+    // Default to true: Shared Image Gallery is the canonical deploy-time image
+    // form on Azure (bake produces a managed image in the bake region, then a
+    // replication step publishes gallery image versions everywhere else).
+    // Callers that only want managed/custom/marketplace results can set this
+    // to false explicitly.
+    Boolean galleryImages = true
     Map<String, String> tags
   }
 }

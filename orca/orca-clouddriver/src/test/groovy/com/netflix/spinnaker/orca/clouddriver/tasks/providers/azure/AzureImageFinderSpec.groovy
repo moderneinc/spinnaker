@@ -123,12 +123,10 @@ class AzureImageFinderSpec extends Specification {
         [moderne_base: "true", moderne_base_os: "ubuntu-arm64-24.04"],
         [])
 
-    then: "clouddriver is asked for gallery images only and returns three out-of-order versions"
+    then: "clouddriver inherits gallery-only from LookupOptions defaults; the finder sends no image-source flags"
     1 * oortService.findImage("azure", "moderne", "moderne-azure", null, [
         "tag:moderne_base"   : "true",
         "tag:moderne_base_os": "ubuntu-arm64-24.04",
-        "managedImages"      : "false",
-        "galleryImages"      : "true",
     ]) >> Calls.response([
         galleryImageWireShape("westus", "2026.5.8", baseTags),
         galleryImageWireShape("westus", "2026.5.10", baseTags),
