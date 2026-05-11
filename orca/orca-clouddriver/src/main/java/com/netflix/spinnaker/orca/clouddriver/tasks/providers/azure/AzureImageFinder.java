@@ -46,8 +46,28 @@ public class AzureImageFinder implements ImageFinder {
         regions,
         account);
 
+    // Image source selection: managed-only (the historical AWS-parity shape),
+    // gallery-only (Shared Image Gallery -- the canonical replicated form for
+    // regions the bake doesn't bake into directly), or both. Default is "both",
+    // matching the controller's pre-gating behavior. A pipeline pins this via
+    // stage.context.imageSource.
+    String imageSource = stageData.imageSource;
+    boolean wantManaged = imageSource == null
+        || imageSource.equalsIgnoreCase("managed")
+        || imageSource.equalsIgnoreCase("both");
+    boolean wantGallery = imageSource == null
+        || imageSource.equalsIgnoreCase("gallery")
+        || imageSource.equalsIgnoreCase("both");
+    if (!wantManaged && !wantGallery) {
+      throw new IllegalArgumentException(
+          "imageSource must be one of \"managed\", \"gallery\", or \"both\" (got: "
+              + imageSource
+              + ")");
+    }
+
     Map<String, String> searchParams = new HashMap<>(prefixTags(tags));
-    searchParams.put("managedImages", "true");
+    searchParams.put("managedImages", String.valueOf(wantManaged));
+    searchParams.put("galleryImages", String.valueOf(wantGallery));
 
     List<AzureManagedImage> allMatchedImages =
         Retrofit2SyncCall.execute(
@@ -94,6 +114,12 @@ public class AzureImageFinder implements ImageFinder {
     @JsonProperty List<String> regions;
     @JsonProperty String packageName;
     @JsonProperty Map<String, String> tags;
+    // Optional. One of "managed" (managed images only), "gallery" (Shared
+    // Image Gallery only), or "both" (default, current behavior). Pinning to
+    // "gallery" prevents the comparator from being asked to choose between a
+    // managed image and a gallery image in the same region -- the regression
+    // captured by AzureImageFinderSpec#byTags exposes the documented gap.
+    @JsonProperty String imageSource;
   }
 
   static class AzureManagedImage implements Comparable<AzureManagedImage> {
@@ -102,6 +128,11 @@ public class AzureImageFinder implements ImageFinder {
     @JsonProperty String region;
     @JsonProperty String osType;
     @JsonProperty String uri;
+    // Set only for Shared Image Gallery results, where all versions of an
+    // image definition share the same `imageName` (= imageDefinitionName) and
+    // the version is what actually distinguishes them. Managed-image results
+    // leave this null and rely on the timestamp embedded in `imageName`.
+    @JsonProperty String version;
     @JsonProperty Map<String, Object> attributes;
     @JsonProperty Map<String, String> tags;
 
@@ -115,14 +146,53 @@ public class AzureImageFinder implements ImageFinder {
                           tags.get("build_host"), av.getBuildJobName(), av.getBuildNumber()))
               .orElse(null);
 
-      return new AzureImageDetails(imageName, region, resourceGroup, osType, uri, jenkinsDetails);
+      return new AzureImageDetails(
+          imageName, region, resourceGroup, osType, uri, version, jenkinsDetails);
     }
 
     @Override
     public int compareTo(AzureManagedImage other) {
-      // Sort by name (reverse alphabetical to get latest versions)
-      return other.imageName.compareTo(this.imageName);
+      // Sort by name first (reverse alphabetical to get latest versions).
+      int byName = other.imageName.compareTo(this.imageName);
+      if (byName != 0) {
+        return byName;
+      }
+      // Names tie -- this is the gallery-image case, where every version of
+      // an image definition reports the same imageName. Without a tiebreaker
+      // the dedup-per-region loop downstream picks a random version. Compare
+      // by `version` (descending) so the highest version wins.
+      return compareVersions(other.version, this.version);
     }
+  }
+
+  // Numeric-aware comparison for Shared Image Gallery versions, which Azure
+  // requires to be `MAJOR.MINOR.PATCH` integers. Falls back to lexicographic
+  // comparison for any non-numeric component so an unexpected format degrades
+  // gracefully instead of throwing.
+  static int compareVersions(String a, String b) {
+    if (a == null || a.isEmpty()) {
+      return (b == null || b.isEmpty()) ? 0 : -1;
+    }
+    if (b == null || b.isEmpty()) {
+      return 1;
+    }
+    String[] aParts = a.split("\\.");
+    String[] bParts = b.split("\\.");
+    int n = Math.max(aParts.length, bParts.length);
+    for (int i = 0; i < n; i++) {
+      String aPart = i < aParts.length ? aParts[i] : "0";
+      String bPart = i < bParts.length ? bParts[i] : "0";
+      int cmp;
+      try {
+        cmp = Long.compare(Long.parseLong(aPart), Long.parseLong(bPart));
+      } catch (NumberFormatException e) {
+        cmp = aPart.compareTo(bPart);
+      }
+      if (cmp != 0) {
+        return cmp;
+      }
+    }
+    return 0;
   }
 
   static class AzureImageDetails extends HashMap<String, Object> implements ImageDetails {
@@ -132,6 +202,7 @@ public class AzureImageFinder implements ImageFinder {
         String resourceGroup,
         String osType,
         String uri,
+        String version,
         JenkinsDetails jenkinsDetails) {
       put("imageName", imageName);
       String imageId = (uri != null && !uri.isEmpty() && !uri.equals("na")) ? uri : "na";
@@ -139,6 +210,10 @@ public class AzureImageFinder implements ImageFinder {
       put("region", region);
       put("resourceGroup", resourceGroup);
       put("osType", osType);
+
+      if (version != null && !version.isEmpty()) {
+        put("version", version);
+      }
 
       if (jenkinsDetails != null) {
         put("jenkins", jenkinsDetails);

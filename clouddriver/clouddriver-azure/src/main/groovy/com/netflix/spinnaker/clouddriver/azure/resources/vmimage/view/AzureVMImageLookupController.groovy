@@ -359,34 +359,43 @@ class AzureVMImageLookupController {
   List<AzureNamedImage> findImagesByTags(LookupOptions lookupOptions) {
     def results = [] as List<AzureNamedImage>
 
-    // Search managed images
-    def pattern = Keys.getManagedVMImageKey(azureCloudProvider,
-      lookupOptions.account ?: '*',
-      lookupOptions.region ?: '*',
-      "*", "*", "*")
+    // If the caller explicitly asked for one source (managedImages=true OR
+    // galleryImages=true), respect that. If both flags are false/null (legacy
+    // callers that don't set either), search both -- this preserves the
+    // historical "tags imply both sources" behavior so this change is a no-op
+    // until a caller opts in.
+    boolean anyExplicit = lookupOptions.managedImages || lookupOptions.galleryImages
+    boolean searchManaged = anyExplicit ? lookupOptions.managedImages : true
+    boolean searchGallery = anyExplicit ? lookupOptions.galleryImages : true
 
-    def identifiers = cacheView.filterIdentifiers(Keys.Namespace.AZURE_MANAGEDIMAGES.ns, pattern)
-    def data = cacheView.getAll(Keys.Namespace.AZURE_MANAGEDIMAGES.ns, identifiers, RelationshipCacheFilter.none())
+    if (searchManaged) {
+      def pattern = Keys.getManagedVMImageKey(azureCloudProvider,
+        lookupOptions.account ?: '*',
+        lookupOptions.region ?: '*',
+        "*", "*", "*")
 
-    for (cacheData in data) {
-      try {
-        AzureManagedVMImage vmImage = objectMapper.convertValue(cacheData.attributes['vmimage'], AzureManagedVMImage)
-        def parts = Keys.parse(azureCloudProvider, cacheData.id)
+      def identifiers = cacheView.filterIdentifiers(Keys.Namespace.AZURE_MANAGEDIMAGES.ns, pattern)
+      def data = cacheView.getAll(Keys.Namespace.AZURE_MANAGEDIMAGES.ns, identifiers, RelationshipCacheFilter.none())
 
-        if (matchesFilters(vmImage, lookupOptions)) {
-          results += buildAzureNamedImage(vmImage, parts)
+      for (cacheData in data) {
+        try {
+          AzureManagedVMImage vmImage = objectMapper.convertValue(cacheData.attributes['vmimage'], AzureManagedVMImage)
+          def parts = Keys.parse(azureCloudProvider, cacheData.id)
 
-          if (results.size() >= MAX_SEARCH_RESULTS) {
-            break
+          if (matchesFilters(vmImage, lookupOptions)) {
+            results += buildAzureNamedImage(vmImage, parts)
+
+            if (results.size() >= MAX_SEARCH_RESULTS) {
+              break
+            }
           }
+        } catch (Exception e) {
+          log.error("findImagesByTags -> Unexpected exception", e)
         }
-      } catch (Exception e) {
-        log.error("findImagesByTags -> Unexpected exception", e)
       }
     }
 
-    // Also search gallery images
-    if (results.size() < MAX_SEARCH_RESULTS) {
+    if (searchGallery && results.size() < MAX_SEARCH_RESULTS) {
       def galleryPattern = Keys.getGalleryImageKey(azureCloudProvider,
         lookupOptions.account ?: '*',
         lookupOptions.region ?: '*',
