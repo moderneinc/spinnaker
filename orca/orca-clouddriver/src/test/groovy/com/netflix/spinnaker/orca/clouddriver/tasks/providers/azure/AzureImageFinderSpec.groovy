@@ -23,7 +23,6 @@ import com.netflix.spinnaker.orca.pipeline.model.StageExecutionImpl
 import retrofit2.mock.Calls
 import spock.lang.Specification
 import spock.lang.Subject
-import spock.lang.Unroll
 
 class AzureImageFinderSpec extends Specification {
 
@@ -35,31 +34,17 @@ class AzureImageFinderSpec extends Specification {
 
   // Wire shape that AzureVMImageLookupController#buildGalleryAzureNamedImage emits
   // for Shared Image Gallery results: stable imageName (= imageDefinitionName),
-  // version segregated, URI carries the full gallery resource path. (Field names
-  // here match the finder's AzureManagedImage POJO so a stock ObjectMapper can
-  // round-trip them in the test -- the controller-side wire field names that
-  // don't map cleanly, like `ostype`, are dropped in production by Jackson
-  // configuration and aren't relevant to selection.)
-  private static Map galleryImageWireShape(String region, String version, Map<String, String> tags) {
+  // version segregated, URI carries the full gallery resource path.
+  private static Map galleryImageWireShape(
+      String region, String version, Map<String, String> tags,
+      String imageDefinitionName = "moderne-arm64-noble") {
     [
-        imageName: "moderne-arm64-noble",
+        imageName: imageDefinitionName,
         version  : version,
         region   : region,
         uri      : "/subscriptions/sub/resourceGroups/rg/providers/" +
                    "Microsoft.Compute/galleries/moderne/images/" +
-                   "moderne-arm64-noble/versions/${version}".toString(),
-        tags     : tags,
-    ]
-  }
-
-  // Wire shape for managed-image results: timestamp baked into imageName, no
-  // version field.
-  private static Map managedImageWireShape(String region, String name, Map<String, String> tags) {
-    [
-        imageName: name,
-        region   : region,
-        uri      : "/subscriptions/sub/resourceGroups/rg/providers/" +
-                   "Microsoft.Compute/images/${name}".toString(),
+                   "${imageDefinitionName}/versions/${version}".toString(),
         tags     : tags,
     ]
   }
@@ -83,7 +68,7 @@ class AzureImageFinderSpec extends Specification {
     "1.0.0-rc1"  | "1.0.0-rc2"  | -1  // non-numeric falls back to lex
   }
 
-  def "AzureManagedImage compareTo tiebreaks on version when imageName ties (gallery case)"() {
+  def "AzureManagedImage compareTo tiebreaks on version when imageDefinitionName ties"() {
     given: "two gallery image versions with the same imageDefinitionName"
     def older = new AzureImageFinder.AzureManagedImage(
         imageName: "moderne-arm64-noble",
@@ -97,20 +82,6 @@ class AzureImageFinderSpec extends Specification {
     expect: "the newer version sorts first (compareTo < 0)"
     newer.compareTo(older) < 0
     older.compareTo(newer) > 0
-  }
-
-  def "AzureManagedImage compareTo falls back to imageName when names differ"() {
-    given: "two managed images named with epoch-ms timestamps; gallery version absent"
-    def today = new AzureImageFinder.AzureManagedImage(
-        imageName: "moderne-1746961200000-noble-arm64",
-        region: "canadacentral")
-    def yesterday = new AzureImageFinder.AzureManagedImage(
-        imageName: "moderne-1746874800000-noble-arm64",
-        region: "canadacentral")
-
-    expect: "alphabetically (= numerically, same prefix) later name sorts first"
-    today.compareTo(yesterday) < 0
-    yesterday.compareTo(today) > 0
   }
 
   def "dedup-per-region loop picks the highest-version gallery image"() {
@@ -138,8 +109,8 @@ class AzureImageFinderSpec extends Specification {
     latest["westus"].version == "2026.5.10"
   }
 
-  def "byTags picks the highest gallery version when cache returns versions out of order (devaz scenario)"() {
-    given: "a deploy stage targeting westus -- the devaz tenant scenario"
+  def "byTags picks the highest gallery version when cache returns versions out of order"() {
+    given: "a deploy stage targeting westus"
     def stage = new StageExecutionImpl(PipelineExecutionImpl.newPipeline("orca"), "", [
         account: "moderne-azure",
         regions: ["westus"],
@@ -152,11 +123,11 @@ class AzureImageFinderSpec extends Specification {
         [moderne_base: "true", moderne_base_os: "ubuntu-arm64-24.04"],
         [])
 
-    then: "clouddriver returns three gallery versions of the same image definition, out of order"
+    then: "clouddriver is asked for gallery images only and returns three out-of-order versions"
     1 * oortService.findImage("azure", "moderne", "moderne-azure", null, [
         "tag:moderne_base"   : "true",
         "tag:moderne_base_os": "ubuntu-arm64-24.04",
-        "managedImages"      : "true",
+        "managedImages"      : "false",
         "galleryImages"      : "true",
     ]) >> Calls.response([
         galleryImageWireShape("westus", "2026.5.8", baseTags),
@@ -174,8 +145,8 @@ class AzureImageFinderSpec extends Specification {
     selected.get("version") == "2026.5.10"
   }
 
-  def "byTags filters out images from regions the deploy doesn't target"() {
-    given: "deploy targets westus; canadacentral is the bake region only"
+  def "byTags filters out gallery images from regions the deploy doesn't target"() {
+    given: "deploy targets westus; an extra gallery version lives in eastus"
     def stage = new StageExecutionImpl(PipelineExecutionImpl.newPipeline("orca"), "", [
         account: "moderne-azure",
         regions: ["westus"],
@@ -188,15 +159,14 @@ class AzureImageFinderSpec extends Specification {
         [moderne_base: "true", moderne_base_os: "ubuntu-arm64-24.04"],
         [])
 
-    then: "clouddriver returns the fresh managed image (canadacentral) AND replicated gallery (westus)"
+    then: "clouddriver returns gallery images in both regions; only the targeted region survives"
     1 * oortService.findImage("azure", "moderne", "moderne-azure", null, _) >> Calls.response([
-        managedImageWireShape("canadacentral",
-            "moderne-1746961200000-noble-arm64", baseTags),
+        galleryImageWireShape("eastus", "2026.5.10", baseTags),
         galleryImageWireShape("westus", "2026.5.10", baseTags),
     ])
     0 * _
 
-    and: "only the westus gallery image is returned; the canadacentral managed image is region-filtered out"
+    and:
     imageDetails.size() == 1
     imageDetails.first().region == "westus"
     imageDetails.first().imageId.endsWith("/versions/2026.5.10")
@@ -255,143 +225,6 @@ class AzureImageFinderSpec extends Specification {
     def stage = new StageExecutionImpl(PipelineExecutionImpl.newPipeline("orca"), "", [
         account: "moderne-azure",
         regions: [],
-    ])
-
-    when:
-    azureImageFinder.byTags(stage, "moderne", [moderne_base: "true"], [])
-
-    then:
-    thrown(IllegalArgumentException)
-    0 * oortService._
-  }
-
-  def "byTags exposes the documented gap when imageSource defaults to both"() {
-    // With default `imageSource`, the controller still returns both kinds when
-    // they coexist in a region. The comparator can't tell that the timestamped
-    // managed name is newer than a stable gallery definitionName, because the
-    // lexicographic compare picks the alphabetically-later string -- 'a' > '1',
-    // so any "moderne-arm64-..." gallery name beats "moderne-<epoch>-..." even
-    // when older. Pinning `imageSource: "gallery"` (next test) avoids this.
-    given:
-    def stage = new StageExecutionImpl(PipelineExecutionImpl.newPipeline("orca"), "", [
-        account: "moderne-azure",
-        regions: ["canadacentral"],
-    ])
-    def baseTags = [moderne_base: "true", moderne_base_os: "ubuntu-arm64-24.04"]
-
-    when:
-    def imageDetails = azureImageFinder.byTags(stage, "moderne",
-        [moderne_base: "true", moderne_base_os: "ubuntu-arm64-24.04"], [])
-
-    then:
-    1 * oortService.findImage("azure", "moderne", "moderne-azure", null, _) >> Calls.response([
-        managedImageWireShape("canadacentral",
-            "moderne-1746961200000-noble-arm64", baseTags),
-        galleryImageWireShape("canadacentral", "2026.5.1", baseTags),  // older!
-    ])
-    0 * _
-
-    and: "gallery wins on name, not on version -- known limitation, structural fix is imageSource: gallery"
-    imageDetails.size() == 1
-    imageDetails.first().imageName == "moderne-arm64-noble"
-    imageDetails.first().get("version") == "2026.5.1"
-  }
-
-  def "imageSource=gallery sends only galleryImages=true and structurally avoids the mixed-source gap"() {
-    given: "the devaz-shape pipeline pins imageSource to gallery"
-    def stage = new StageExecutionImpl(PipelineExecutionImpl.newPipeline("orca"), "", [
-        account    : "moderne-azure",
-        regions    : ["canadacentral"],
-        imageSource: "gallery",
-    ])
-    def baseTags = [moderne_base: "true", moderne_base_os: "ubuntu-arm64-24.04"]
-
-    when:
-    def imageDetails = azureImageFinder.byTags(stage, "moderne",
-        [moderne_base: "true", moderne_base_os: "ubuntu-arm64-24.04"], [])
-
-    then: "controller is told to skip managed images entirely; only gallery rows come back"
-    1 * oortService.findImage("azure", "moderne", "moderne-azure", null, [
-        "tag:moderne_base"   : "true",
-        "tag:moderne_base_os": "ubuntu-arm64-24.04",
-        "managedImages"      : "false",
-        "galleryImages"      : "true",
-    ]) >> Calls.response([
-        galleryImageWireShape("canadacentral", "2026.5.10", baseTags),
-        galleryImageWireShape("canadacentral", "2026.5.8", baseTags),
-    ])
-    0 * _
-
-    and: "the newest gallery version is selected -- no managed image was ever in the running"
-    imageDetails.size() == 1
-    imageDetails.first().get("version") == "2026.5.10"
-  }
-
-  def "imageSource=managed sends only managedImages=true (AWS-parity tenants)"() {
-    given:
-    def stage = new StageExecutionImpl(PipelineExecutionImpl.newPipeline("orca"), "", [
-        account    : "moderne-azure",
-        regions    : ["canadacentral"],
-        imageSource: "managed",
-    ])
-    def baseTags = [moderne_base: "true", moderne_base_os: "ubuntu-arm64-24.04"]
-
-    when:
-    def imageDetails = azureImageFinder.byTags(stage, "moderne",
-        [moderne_base: "true", moderne_base_os: "ubuntu-arm64-24.04"], [])
-
-    then:
-    1 * oortService.findImage("azure", "moderne", "moderne-azure", null, [
-        "tag:moderne_base"   : "true",
-        "tag:moderne_base_os": "ubuntu-arm64-24.04",
-        "managedImages"      : "true",
-        "galleryImages"      : "false",
-    ]) >> Calls.response([
-        managedImageWireShape("canadacentral",
-            "moderne-1746874800000-noble-arm64", baseTags),
-        managedImageWireShape("canadacentral",
-            "moderne-1746961200000-noble-arm64", baseTags),
-    ])
-    0 * _
-
-    and: "newest timestamp wins"
-    imageDetails.size() == 1
-    imageDetails.first().imageName == "moderne-1746961200000-noble-arm64"
-  }
-
-  def "imageSource is case-insensitive and accepts 'both' explicitly"() {
-    given:
-    def stage = new StageExecutionImpl(PipelineExecutionImpl.newPipeline("orca"), "", [
-        account    : "moderne-azure",
-        regions    : ["westus"],
-        imageSource: source,
-    ])
-
-    when:
-    azureImageFinder.byTags(stage, "moderne",
-        [moderne_base: "true", moderne_base_os: "ubuntu-arm64-24.04"], [])
-
-    then:
-    1 * oortService.findImage("azure", "moderne", "moderne-azure", null, { Map m ->
-      m["managedImages"] == expectedManaged && m["galleryImages"] == expectedGallery
-    }) >> Calls.response([])
-
-    where:
-    source    | expectedManaged | expectedGallery
-    "gallery" | "false"         | "true"
-    "GALLERY" | "false"         | "true"
-    "managed" | "true"          | "false"
-    "Managed" | "true"          | "false"
-    "both"    | "true"          | "true"
-    "BOTH"    | "true"          | "true"
-  }
-
-  def "byTags throws when imageSource is unrecognised"() {
-    given:
-    def stage = new StageExecutionImpl(PipelineExecutionImpl.newPipeline("orca"), "", [
-        account    : "moderne-azure",
-        regions    : ["westus"],
-        imageSource: "nonsense",
     ])
 
     when:

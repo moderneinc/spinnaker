@@ -46,28 +46,15 @@ public class AzureImageFinder implements ImageFinder {
         regions,
         account);
 
-    // Image source selection: managed-only (the historical AWS-parity shape),
-    // gallery-only (Shared Image Gallery -- the canonical replicated form for
-    // regions the bake doesn't bake into directly), or both. Default is "both",
-    // matching the controller's pre-gating behavior. A pipeline pins this via
-    // stage.context.imageSource.
-    String imageSource = stageData.imageSource;
-    boolean wantManaged = imageSource == null
-        || imageSource.equalsIgnoreCase("managed")
-        || imageSource.equalsIgnoreCase("both");
-    boolean wantGallery = imageSource == null
-        || imageSource.equalsIgnoreCase("gallery")
-        || imageSource.equalsIgnoreCase("both");
-    if (!wantManaged && !wantGallery) {
-      throw new IllegalArgumentException(
-          "imageSource must be one of \"managed\", \"gallery\", or \"both\" (got: "
-              + imageSource
-              + ")");
-    }
-
+    // Deploys consume Shared Image Gallery versions exclusively: bake produces
+    // a managed image in a single bake region, then a replication step
+    // publishes gallery image versions into every deploy region. Asking the
+    // controller for managed images here would either return nothing (in
+    // regions the bake doesn't touch) or collide with gallery results on
+    // lexicographic name compare. Hard-coding gallery-only sidesteps both.
     Map<String, String> searchParams = new HashMap<>(prefixTags(tags));
-    searchParams.put("managedImages", String.valueOf(wantManaged));
-    searchParams.put("galleryImages", String.valueOf(wantGallery));
+    searchParams.put("managedImages", "false");
+    searchParams.put("galleryImages", "true");
 
     List<AzureManagedImage> allMatchedImages =
         Retrofit2SyncCall.execute(
@@ -114,12 +101,6 @@ public class AzureImageFinder implements ImageFinder {
     @JsonProperty List<String> regions;
     @JsonProperty String packageName;
     @JsonProperty Map<String, String> tags;
-    // Optional. One of "managed" (managed images only), "gallery" (Shared
-    // Image Gallery only), or "both" (default, current behavior). Pinning to
-    // "gallery" prevents the comparator from being asked to choose between a
-    // managed image and a gallery image in the same region -- the regression
-    // captured by AzureImageFinderSpec#byTags exposes the documented gap.
-    @JsonProperty String imageSource;
   }
 
   static class AzureManagedImage implements Comparable<AzureManagedImage> {
