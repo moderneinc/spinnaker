@@ -46,13 +46,12 @@ public class AzureImageFinder implements ImageFinder {
         regions,
         account);
 
-    // Image-source flags inherit their LookupOptions defaults on the
-    // controller side: managedImages=false, galleryImages=true. Deploys
-    // consume Shared Image Gallery versions exclusively (bake produces a
-    // managed image in a single region, replication publishes gallery
-    // versions everywhere else), so the defaults already express what we
-    // want -- no need to set either flag here.
+    // Ask the controller for both managed and gallery image candidates --
+    // managedImages=true here, galleryImages=true inherits from LookupOptions'
+    // default. Source preference between the two (gallery wins on tie) is the
+    // comparator's job (see AzureManagedImage#compareTo).
     Map<String, String> searchParams = new HashMap<>(prefixTags(tags));
+    searchParams.put("managedImages", "true");
 
     List<AzureManagedImage> allMatchedImages =
         Retrofit2SyncCall.execute(
@@ -131,7 +130,21 @@ public class AzureImageFinder implements ImageFinder {
 
     @Override
     public int compareTo(AzureManagedImage other) {
-      // Sort by name first (reverse alphabetical to get latest versions).
+      // Source preference: when both a gallery image and a managed image are
+      // candidates in the same region, gallery wins. Gallery is the canonical
+      // replicated/deploy-time form on Azure, and a lex compare on imageName
+      // would otherwise be unsafe -- a stable gallery imageDefinitionName like
+      // "moderne-arm64-noble" can sort either side of a timestamped managed
+      // name like "moderne-1746961200000-noble-arm64". Gallery rows expose a
+      // non-null `version`; managed rows don't, which is what we discriminate
+      // on here.
+      boolean thisIsGallery = this.version != null && !this.version.isEmpty();
+      boolean otherIsGallery = other.version != null && !other.version.isEmpty();
+      if (thisIsGallery != otherIsGallery) {
+        return thisIsGallery ? -1 : 1;
+      }
+
+      // Same source. Sort by name first (reverse alphabetical to get latest versions).
       int byName = other.imageName.compareTo(this.imageName);
       if (byName != 0) {
         return byName;

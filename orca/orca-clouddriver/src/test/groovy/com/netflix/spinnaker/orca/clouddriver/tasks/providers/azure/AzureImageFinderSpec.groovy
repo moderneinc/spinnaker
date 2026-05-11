@@ -49,6 +49,20 @@ class AzureImageFinderSpec extends Specification {
     ]
   }
 
+  // Wire shape for a managed image: timestamped imageName, no `version` field
+  // (Jackson drops keys absent from AzureManagedImage, so omitting `version`
+  // here matches what production responses look like for managed entries).
+  private static Map managedImageWireShape(
+      String region, String name, Map<String, String> tags) {
+    [
+        imageName: name,
+        region   : region,
+        uri      : "/subscriptions/sub/resourceGroups/rg/providers/" +
+                   "Microsoft.Compute/images/${name}".toString(),
+        tags     : tags,
+    ]
+  }
+
   def "compareVersions orders semver numerically, not lexicographically"() {
     expect:
     Integer.signum(AzureImageFinder.compareVersions(a, b)) == expected
@@ -66,6 +80,22 @@ class AzureImageFinderSpec extends Specification {
     null         | null         | 0
     ""           | "1.0.0"      | -1
     "1.0.0-rc1"  | "1.0.0-rc2"  | -1  // non-numeric falls back to lex
+  }
+
+  def "AzureManagedImage compareTo prefers gallery over managed when both candidate in the same region"() {
+    given: "a gallery image (has version) and a managed image (no version), names that would lex either way"
+    def gallery = new AzureImageFinder.AzureManagedImage(
+        imageName: "moderne-arm64-noble",  // 'a' > '1' on the next char
+        version: "2026.5.1",  // intentionally OLDER than the managed bake
+        region: "canadacentral")
+    def managed = new AzureImageFinder.AzureManagedImage(
+        imageName: "moderne-1746961200000-noble-arm64",
+        version: null,
+        region: "canadacentral")
+
+    expect: "gallery sorts first regardless of name lex or relative age"
+    gallery.compareTo(managed) < 0
+    managed.compareTo(gallery) > 0
   }
 
   def "AzureManagedImage compareTo tiebreaks on version when imageDefinitionName ties"() {
@@ -123,10 +153,11 @@ class AzureImageFinderSpec extends Specification {
         [moderne_base: "true", moderne_base_os: "ubuntu-arm64-24.04"],
         [])
 
-    then: "clouddriver inherits gallery-only from LookupOptions defaults; the finder sends no image-source flags"
+    then: "finder asks for managed; gallery defaults to true on LookupOptions so both caches are searched"
     1 * oortService.findImage("azure", "moderne", "moderne-azure", null, [
         "tag:moderne_base"   : "true",
         "tag:moderne_base_os": "ubuntu-arm64-24.04",
+        "managedImages"      : "true",
     ]) >> Calls.response([
         galleryImageWireShape("westus", "2026.5.8", baseTags),
         galleryImageWireShape("westus", "2026.5.10", baseTags),
@@ -231,5 +262,38 @@ class AzureImageFinderSpec extends Specification {
     then:
     thrown(IllegalArgumentException)
     0 * oortService._
+  }
+
+  def "byTags picks gallery over managed in the same region (the documented gap is closed)"() {
+    // Mixed managed + gallery in canadacentral: bake produces the managed
+    // image and the replication step publishes a gallery version pointing at
+    // the same content. Before the comparator's source preference, gallery
+    // would beat managed on lex (or lose, depending on names). Now gallery
+    // wins unconditionally when both are candidates -- gallery is the
+    // canonical deploy-time form.
+    given:
+    def stage = new StageExecutionImpl(PipelineExecutionImpl.newPipeline("orca"), "", [
+        account: "moderne-azure",
+        regions: ["canadacentral"],
+    ])
+    def baseTags = [moderne_base: "true", moderne_base_os: "ubuntu-arm64-24.04"]
+
+    when:
+    def imageDetails = azureImageFinder.byTags(stage, "moderne",
+        [moderne_base: "true", moderne_base_os: "ubuntu-arm64-24.04"], [])
+
+    then: "clouddriver returns both: a fresh managed image and an older gallery version"
+    1 * oortService.findImage("azure", "moderne", "moderne-azure", null, _) >> Calls.response([
+        managedImageWireShape("canadacentral",
+            "moderne-1746961200000-noble-arm64", baseTags),
+        galleryImageWireShape("canadacentral", "2026.5.1", baseTags),
+    ])
+    0 * _
+
+    and: "gallery wins on source preference, not on lex or age"
+    imageDetails.size() == 1
+    imageDetails.first().imageName == "moderne-arm64-noble"
+    imageDetails.first().get("version") == "2026.5.1"
+    imageDetails.first().imageId.contains("/galleries/")
   }
 }
