@@ -48,7 +48,7 @@ final class EcrDockerTagResolverTest {
     credentialsRepository = org.mockito.Mockito.mock(CredentialsRepository.class);
     ecr = org.mockito.Mockito.mock(AmazonECR.class);
 
-    NetflixECSCredentials creds = stubCredentials("297794628946", "us-west-2");
+    NetflixECSCredentials creds = stubCredentials("123456789012", "us-west-2");
     org.mockito.Mockito.when(credentialsRepository.getAll()).thenReturn(Set.of(creds));
     org.mockito.Mockito.when(
             amazonClientProvider.getAmazonEcr(
@@ -65,11 +65,11 @@ final class EcrDockerTagResolverTest {
     stubDescribeImages(List.of("latest", "0.147.3", "0.146.0", "0.147.3-rc1"));
     EcrDockerTagResolver.ResolveResult result =
         target.resolve(
-            "297794628946.dkr.ecr.us-west-2.amazonaws.com/moderne/recipe-worker-arm64:latest");
+            "123456789012.dkr.ecr.us-west-2.amazonaws.com/moderne/recipe-worker-arm64:latest");
     assertThat(result.resolvedTag).isEqualTo("0.147.3");
     assertThat(result.resolvedReference)
         .isEqualTo(
-            "297794628946.dkr.ecr.us-west-2.amazonaws.com/moderne/recipe-worker-arm64:0.147.3");
+            "123456789012.dkr.ecr.us-west-2.amazonaws.com/moderne/recipe-worker-arm64:0.147.3");
   }
 
   @Test
@@ -78,7 +78,7 @@ final class EcrDockerTagResolverTest {
     assertThatThrownBy(
             () ->
                 target.resolve(
-                    "297794628946.dkr.ecr.us-west-2.amazonaws.com/moderne/recipe-worker-arm64:latest"))
+                    "123456789012.dkr.ecr.us-west-2.amazonaws.com/moderne/recipe-worker-arm64:latest"))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("no peer tag matching stable semver");
   }
@@ -89,7 +89,7 @@ final class EcrDockerTagResolverTest {
     assertThatThrownBy(
             () ->
                 target.resolve(
-                    "297794628946.dkr.ecr.us-west-2.amazonaws.com/moderne/recipe-worker-arm64:latest"))
+                    "123456789012.dkr.ecr.us-west-2.amazonaws.com/moderne/recipe-worker-arm64:latest"))
         .isInstanceOf(NotFoundException.class);
   }
 
@@ -100,7 +100,7 @@ final class EcrDockerTagResolverTest {
     assertThatThrownBy(
             () ->
                 target.resolve(
-                    "297794628946.dkr.ecr.us-west-2.amazonaws.com/moderne/recipe-worker-arm64:latest"))
+                    "123456789012.dkr.ecr.us-west-2.amazonaws.com/moderne/recipe-worker-arm64:latest"))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("No ECR image found for tag latest");
   }
@@ -111,7 +111,7 @@ final class EcrDockerTagResolverTest {
     stubDescribeImages(List.of("latest", "0.9.9", "0.10.0"));
     EcrDockerTagResolver.ResolveResult result =
         target.resolve(
-            "297794628946.dkr.ecr.us-west-2.amazonaws.com/moderne/recipe-worker-arm64:latest");
+            "123456789012.dkr.ecr.us-west-2.amazonaws.com/moderne/recipe-worker-arm64:latest");
     assertThat(result.resolvedTag).isEqualTo("0.10.0");
   }
 
@@ -156,8 +156,8 @@ final class EcrDockerTagResolverTest {
   void parsesReferenceComponents() {
     EcrDockerTagResolver.EcrReference parsed =
         EcrDockerTagResolver.EcrReference.parse(
-            "297794628946.dkr.ecr.us-west-2.amazonaws.com/moderne/recipe-worker-arm64:latest");
-    assertThat(parsed.accountId).isEqualTo("297794628946");
+            "123456789012.dkr.ecr.us-west-2.amazonaws.com/moderne/recipe-worker-arm64:latest");
+    assertThat(parsed.accountId).isEqualTo("123456789012");
     assertThat(parsed.region).isEqualTo("us-west-2");
     assertThat(parsed.repository).isEqualTo("moderne/recipe-worker-arm64");
     assertThat(parsed.tag).isEqualTo("latest");

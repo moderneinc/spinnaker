@@ -36,7 +36,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class EcrDockerLatestResolver implements DockerLatestResolver {
-  // Full ECR URI: 297794628946.dkr.ecr.us-west-2.amazonaws.com/moderne/repo:tag
+  // Full ECR URI: 123456789012.dkr.ecr.us-west-2.amazonaws.com/moderne/repo:tag
   private static final Pattern ECR_FULL_REFERENCE =
       Pattern.compile("^(?:https?://)?\\d{12}\\.dkr\\.ecr\\.[a-z0-9-]+\\.amazonaws\\.com/.+:.+$");
 
