@@ -236,19 +236,13 @@ class AzureResourceManagerClient extends AzureBaseClient {
   }
 
   /**
-   * Surface as much ARM error detail as possible when a deployment fails.
-   *
-   * The Azure SDK's {@code ManagementException} carries the structured ARM
-   * error model on {@code getValue()} (code / message / target / details),
-   * but {@code e.message} drops it on the floor for LRO terminations —
-   * leaving only "Long running operation is Failed or Cancelled." in the
-   * logs and nothing to act on.
-   *
-   * After logging the exception, attempt to fetch the deployment's per-resource
-   * operations from Azure. When an LRO fails mid-deployment, the failing
-   * sub-operation's {@code statusMessage} is the actual reason ARM gave.
-   * Fetch failures are non-fatal — the original exception is what callers
-   * react to; this is observability.
+   * {@code ManagementException.getValue()} carries the parsed ARM error model
+   * (code/message/target/details) that {@code e.message} drops on LRO
+   * terminations — there the message is just "Long running operation is Failed
+   * or Cancelled." After logging, fetch the deployment's per-resource
+   * operations so the failing sub-operation's {@code statusMessage} is also
+   * captured. Fetch failures are demoted to debug; the original exception
+   * still propagates.
    */
   private void logDeploymentFailure(String resourceGroupName, String deploymentName, Throwable e) {
     if (e instanceof ManagementException) {
@@ -269,7 +263,7 @@ class AzureResourceManagerClient extends AzureBaseClient {
     try {
       Deployment deployment = azure.deployments().getByResourceGroup(resourceGroupName, deploymentName)
       deployment?.deploymentOperations()?.list()?.each { DeploymentOperation op ->
-        if (op.provisioningState() != "Succeeded") {
+        if (op.provisioningState() != AzureUtilities.ProvisioningState.SUCCEEDED) {
           log.error(
             "  failed operation: target={} state={} statusCode={} statusMessage={}",
             op.targetResource()?.id() ?: "<none>",
