@@ -43,6 +43,7 @@ import groovy.util.logging.Slf4j
 
 import static com.netflix.spinnaker.cats.agent.AgentDataType.Authority.AUTHORITATIVE
 import static com.netflix.spinnaker.cats.agent.AgentDataType.Authority.INFORMATIVE
+import static com.netflix.spinnaker.clouddriver.azure.client.AzureBaseClient.resourceNotFound
 
 @Slf4j
 class AzureServerGroupCachingAgent extends AzureCachingAgent {
@@ -243,9 +244,18 @@ class AzureServerGroupCachingAgent extends AzureCachingAgent {
         def sg = creds.computeClient.getServerGroup(resourceGroupName, serverGroupName)
         return sg ?: null
       }
-    } catch (Exception e ) {
-      log.error("handle->Unexpected exception: ${e.message}")
-      return null
+    } catch (Exception e) {
+      // A 404 here means the VMSS is gone. Fall through with serverGroup=null
+      // so the deleted-VMSS branch below writes an eviction tombstone — the
+      // alternative (return null) leaves Orca's force-cache-refresh recovery
+      // path spinning forever waiting for a pending entry that never arrives.
+      // Any other exception is transient; bail without touching the cache.
+      if (resourceNotFound(e)) {
+        log.warn("handle->ServerGroup not found, treating as deleted (resourceGroup: ${resourceGroupName}, serverGroup: ${serverGroupName})")
+      } else {
+        log.error("handle->Unexpected exception: ${e.message}")
+        return null
+      }
     }
 
     def cacheResult = metricsSupport.transformData {

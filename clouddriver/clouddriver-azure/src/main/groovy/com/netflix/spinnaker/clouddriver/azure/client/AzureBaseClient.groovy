@@ -246,7 +246,14 @@ abstract class AzureBaseClient {
   }
 
   static Boolean resourceNotFound(Exception e) {
-    e.class == ManagementException ? (e as ManagementException).getResponse().getStatusCode() == HttpURLConnection.HTTP_NOT_FOUND : false
+    // Use instanceof so subclasses of ManagementException (the Azure SDK can
+    // surface a typed subclass for certain ARM error families) still match.
+    // Strict class equality let 404s bypass executeOp's "return null on
+    // not-found" short-circuit, causing the AzureServerGroupCachingAgent
+    // on-demand handler to throw on a deleted VMSS instead of writing an
+    // eviction tombstone — which left Orca's force-cache-refresh recovery
+    // path looping until the queue saturated.
+    e instanceof ManagementException && (e as ManagementException).getResponse().getStatusCode() == HttpURLConnection.HTTP_NOT_FOUND
   }
 
   /***
