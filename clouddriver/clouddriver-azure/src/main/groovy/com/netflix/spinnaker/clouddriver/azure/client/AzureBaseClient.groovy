@@ -162,11 +162,11 @@ abstract class AzureBaseClient {
    */
   private static boolean canRetry(Exception e) {
     boolean retry = false
-    if (e.class == ManagementException) {
+    if (e instanceof ManagementException) {
       def code = (e as ManagementException).getResponse().getStatusCode()
       retry = (code == HttpURLConnection.HTTP_CLIENT_TIMEOUT
         || (code >= HttpURLConnection.HTTP_INTERNAL_ERROR && code <= HttpURLConnection.HTTP_GATEWAY_TIMEOUT))
-    } else if (e.class == SocketTimeoutException) {
+    } else if (e instanceof SocketTimeoutException) {
       //If we get a socket time out try again
       retry = true
     }
@@ -180,7 +180,7 @@ abstract class AzureBaseClient {
    * @return True if the exception encountered was a 429 Response and it was handled
    */
   private static boolean handleTooManyRequestsResponse(Exception e) {
-    if (e.class == ManagementException.class) {
+    if (e instanceof ManagementException) {
       def response = (e as ManagementException).getResponse()
       if (response.getStatusCode() == HTTP_TOO_MANY_REQUESTS) {
         int retryAfterIntervalSec = DEFAULT_429_RETRY_INTERVAL_SEC
@@ -246,13 +246,7 @@ abstract class AzureBaseClient {
   }
 
   static Boolean resourceNotFound(Exception e) {
-    // Use instanceof so subclasses of ManagementException (the Azure SDK can
-    // surface a typed subclass for certain ARM error families) still match.
-    // Strict class equality let 404s bypass executeOp's "return null on
-    // not-found" short-circuit, causing the AzureServerGroupCachingAgent
-    // on-demand handler to throw on a deleted VMSS instead of writing an
-    // eviction tombstone — which left Orca's force-cache-refresh recovery
-    // path looping until the queue saturated.
+    // Azure SDK surfaces typed subclasses for some ARM error families; instanceof catches those, strict class equality wouldn't.
     e instanceof ManagementException && (e as ManagementException).getResponse().getStatusCode() == HttpURLConnection.HTTP_NOT_FOUND
   }
 
