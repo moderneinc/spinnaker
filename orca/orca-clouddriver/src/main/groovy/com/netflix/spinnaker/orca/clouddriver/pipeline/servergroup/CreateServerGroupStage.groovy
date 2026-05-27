@@ -72,9 +72,7 @@ class CreateServerGroupStage extends AbstractDeployStrategyStage implements Forc
       @Nonnull StageExecution stage,
       @Nonnull ContextParameterProcessor contextParameterProcessor,
       @Nonnull ExpressionEvaluationSummary summary) {
-    Boolean skipExpressionEvaluation =
-        (Boolean) stage.context.getOrDefault("skipExpressionEvaluation", false)
-    if (skipExpressionEvaluation) {
+    if (Boolean.TRUE.equals(stage.context.get("skipExpressionEvaluation"))) {
       processDefaultEntries(stage, contextParameterProcessor, summary, ["osConfig"])
       return false
     }
