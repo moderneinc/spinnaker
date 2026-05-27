@@ -102,7 +102,6 @@ class AzureAppGatewayDescription extends AzureResourceOpsDescription {
     }
 
     // We only support one subnet so we can just retrieve the first one.
-    // Use find{} instead of first() to avoid NoSuchElementException on an empty list.
     description.subnetResourceId = appGateway?.gatewayIpConfigurations()?.find { it != null }?.subnet()?.id()
     description.subnet = AzureUtilities.getNameFromResourceId(description.subnetResourceId)
     description.vnet = AzureUtilities.getResourceNameFromId(description.subnetResourceId)
@@ -116,16 +115,13 @@ class AzureAppGatewayDescription extends AzureResourceOpsDescription {
 
     // Use ?.each so a null requestRoutingRules() is treated as an empty collection.
     appGateway.requestRoutingRules()?.each { rule ->
-      // rule.httpListener() may be null; skip the rule rather than NPE inside find{}.
       def listenerRef = rule.httpListener()
       def httpListener = listenerRef != null ? appGateway.httpListeners()?.find { it.id() == listenerRef.id() } : null
       // Only HTTP protocol types are supported for now; ignore any other probes
       // TODO: add support for other protocols (if needed)
       if (httpListener && httpListener.protocol() == ApplicationGatewayProtocol.HTTP) {
-        // httpListener.frontendPort() may be null; guard before calling .id() inside find{}.
         def frontendPortRef = httpListener.frontendPort()
         def frontendPort = frontendPortRef != null ? appGateway.frontendPorts()?.find { it.id() == frontendPortRef.id() } : null
-        // rule.backendHttpSettings() may be null; guard before calling .id() inside find{}.
         def backendSettingsRef = rule.backendHttpSettings()
         def backendHttpSettingsCollection = backendSettingsRef != null ? appGateway.backendHttpSettingsCollection()?.find { it.id() == backendSettingsRef.id() } : null
         if (frontendPort && backendHttpSettingsCollection) {

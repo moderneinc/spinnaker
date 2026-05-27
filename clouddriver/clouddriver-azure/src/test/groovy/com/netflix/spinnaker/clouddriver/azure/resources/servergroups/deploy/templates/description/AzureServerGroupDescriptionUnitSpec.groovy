@@ -139,10 +139,6 @@ class AzureServerGroupDescriptionUnitSpec extends Specification {
     description.disabled == false
   }
 
-  // -------------------------------------------------------------------------
-  // Hazard: scaleSet.upgradePolicy() returns null — .mode().name() throws NPE.
-  // A scale set can arrive from the Azure API without an upgrade policy set.
-  // -------------------------------------------------------------------------
   def 'should tolerate a null upgradePolicy'() {
     given: 'a scale set with no upgradePolicy'
     def scaleSet = createBaseScaleSet(["stack": "testStack", "detail": "testDetail",

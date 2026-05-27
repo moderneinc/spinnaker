@@ -101,10 +101,6 @@ class AzureAppGatewayDescriptionSpec extends Specification {
     description.publicIpName == "myapp-pip"
   }
 
-  // -------------------------------------------------------------------------
-  // Hazard: .first() on empty gatewayIpConfigurations list throws
-  //         NoSuchElementException.  subnetResourceId must stay null.
-  // -------------------------------------------------------------------------
   def 'getDescriptionForAppGateway tolerates empty gatewayIpConfigurations'() {
     given: 'an AGW whose gatewayIpConfigurations list is empty'
     def agw = buildMinimalAgw()
@@ -118,10 +114,6 @@ class AzureAppGatewayDescriptionSpec extends Specification {
     description.subnetResourceId == null
   }
 
-  // -------------------------------------------------------------------------
-  // Hazard: null requestRoutingRules() — .each on null throws NPE.
-  //         Already partially handled at line 89 but line 116 is unguarded.
-  // -------------------------------------------------------------------------
   def 'getDescriptionForAppGateway tolerates null requestRoutingRules'() {
     given: 'an AGW that returns null for requestRoutingRules'
     def agw = buildMinimalAgw()
@@ -135,10 +127,6 @@ class AzureAppGatewayDescriptionSpec extends Specification {
     description.loadBalancingRules.isEmpty()
   }
 
-  // -------------------------------------------------------------------------
-  // Hazard: rule.httpListener() is null — .id() on null throws NPE when
-  // httpListeners list is non-empty (closure body is evaluated).
-  // -------------------------------------------------------------------------
   def 'getDescriptionForAppGateway skips routing rule when httpListener reference is null'() {
     given: 'a rule with no httpListener reference but a non-empty listeners list'
     def agw = buildMinimalAgw()
@@ -150,10 +138,10 @@ class AzureAppGatewayDescriptionSpec extends Specification {
 
     def rule = Mockito.mock(ApplicationGatewayRequestRoutingRuleInner)
     Mockito.when(rule.name()).thenReturn("rule1")
-    Mockito.when(rule.httpListener()).thenReturn(null)  // null reference → NPE on .id() inside find{}
+    Mockito.when(rule.httpListener()).thenReturn(null)
 
     Mockito.when(agw.requestRoutingRules()).thenReturn([rule])
-    Mockito.when(agw.httpListeners()).thenReturn([someListener])  // non-empty so closure IS evaluated
+    Mockito.when(agw.httpListeners()).thenReturn([someListener])
     Mockito.when(agw.frontendPorts()).thenReturn([])
     Mockito.when(agw.backendHttpSettingsCollection()).thenReturn([])
 
@@ -165,9 +153,6 @@ class AzureAppGatewayDescriptionSpec extends Specification {
     description.loadBalancingRules.isEmpty()
   }
 
-  // -------------------------------------------------------------------------
-  // Hazard: httpListeners() is null — .find on null throws NPE.
-  // -------------------------------------------------------------------------
   def 'getDescriptionForAppGateway tolerates null httpListeners'() {
     given: 'an AGW with a routing rule but null httpListeners'
     def agw = buildMinimalAgw()
@@ -186,10 +171,6 @@ class AzureAppGatewayDescriptionSpec extends Specification {
     description.loadBalancingRules.isEmpty()
   }
 
-  // -------------------------------------------------------------------------
-  // Hazard: httpListener.frontendPort() is null — .id() throws NPE when the
-  // frontendPorts list is non-empty (closure body IS evaluated).
-  // -------------------------------------------------------------------------
   def 'getDescriptionForAppGateway skips routing rule when frontendPort reference is null'() {
     given: 'a matched HTTP listener whose frontendPort reference is null but frontendPorts list is non-empty'
     def agw = buildMinimalAgw()
@@ -199,9 +180,8 @@ class AzureAppGatewayDescriptionSpec extends Specification {
     def listener = new ApplicationGatewayHttpListener()
       .withId(listenerId)
       .withProtocol(ApplicationGatewayProtocol.HTTP)
-      // frontendPort intentionally NOT set → frontendPort() returns null → NPE on .id() inside find{}
+      // frontendPort intentionally not set → frontendPort() returns null
 
-    // A non-null frontend port object to force closure evaluation
     def someFrontendPort = new ApplicationGatewayFrontendPort()
       .withId("/subscriptions/s/resourceGroups/rg/providers/Microsoft.Network/applicationGateways/agw/frontendPorts/port80")
       .withPort(80)
@@ -212,7 +192,7 @@ class AzureAppGatewayDescriptionSpec extends Specification {
 
     Mockito.when(agw.requestRoutingRules()).thenReturn([rule])
     Mockito.when(agw.httpListeners()).thenReturn([listener])
-    Mockito.when(agw.frontendPorts()).thenReturn([someFrontendPort])  // non-empty so closure IS evaluated
+    Mockito.when(agw.frontendPorts()).thenReturn([someFrontendPort])
     Mockito.when(agw.backendHttpSettingsCollection()).thenReturn([])
 
     when:
@@ -223,10 +203,6 @@ class AzureAppGatewayDescriptionSpec extends Specification {
     description.loadBalancingRules.isEmpty()
   }
 
-  // -------------------------------------------------------------------------
-  // Hazard: rule.backendHttpSettings() is null — .id() throws NPE when the
-  // backendHttpSettingsCollection is non-empty (closure body IS evaluated).
-  // -------------------------------------------------------------------------
   def 'getDescriptionForAppGateway skips routing rule when backendHttpSettings reference is null'() {
     given: 'a matched HTTP listener with valid frontendPort but null backendHttpSettings on the rule'
     def agw = buildMinimalAgw()
@@ -244,7 +220,6 @@ class AzureAppGatewayDescriptionSpec extends Specification {
       .withId(frontendPortId)
       .withPort(80)
 
-    // A non-null backendHttpSettings object in the collection to force closure evaluation
     def someSettingsId = "/subscriptions/s/resourceGroups/rg/providers/Microsoft.Network/applicationGateways/agw/backendHttpSettingsCollection/settings1"
     def someSettings = new ApplicationGatewayBackendHttpSettings()
       .withId(someSettingsId)
@@ -253,12 +228,12 @@ class AzureAppGatewayDescriptionSpec extends Specification {
     def rule = Mockito.mock(ApplicationGatewayRequestRoutingRuleInner)
     Mockito.when(rule.name()).thenReturn("rule1")
     Mockito.when(rule.httpListener()).thenReturn(listenerRef)
-    Mockito.when(rule.backendHttpSettings()).thenReturn(null)  // null → NPE on .id() inside find{}
+    Mockito.when(rule.backendHttpSettings()).thenReturn(null)
 
     Mockito.when(agw.requestRoutingRules()).thenReturn([rule])
     Mockito.when(agw.httpListeners()).thenReturn([listener])
     Mockito.when(agw.frontendPorts()).thenReturn([frontendPort])
-    Mockito.when(agw.backendHttpSettingsCollection()).thenReturn([someSettings])  // non-empty so closure IS evaluated
+    Mockito.when(agw.backendHttpSettingsCollection()).thenReturn([someSettings])
 
     when:
     def description = AzureAppGatewayDescription.getDescriptionForAppGateway(agw)
@@ -268,9 +243,6 @@ class AzureAppGatewayDescriptionSpec extends Specification {
     description.loadBalancingRules.isEmpty()
   }
 
-  // -------------------------------------------------------------------------
-  // Happy path: a fully-formed routing rule is mapped to a loadBalancingRule.
-  // -------------------------------------------------------------------------
   def 'getDescriptionForAppGateway maps a complete HTTP routing rule to a loadBalancingRule'() {
     given: 'a fully-populated AGW with one HTTP routing rule'
     def agw = buildMinimalAgw()
@@ -314,11 +286,8 @@ class AzureAppGatewayDescriptionSpec extends Specification {
     description.loadBalancingRules[0].backendPort == 8080
   }
 
-  // -------------------------------------------------------------------------
-  // Helper: a minimal AGW mock with no routing rules (null) and a valid
-  // gatewayIpConfigurations list with one element.  Tests that need to vary
-  // these properties set them after calling this helper.
-  // -------------------------------------------------------------------------
+  // Helper: minimal AGW mock with no routing rules and a valid gatewayIpConfigurations list.
+  // Tests that need to vary these properties override them after calling this helper.
   private ApplicationGatewayInner buildMinimalAgw() {
     def agw = Mockito.mock(ApplicationGatewayInner)
     Mockito.when(agw.name()).thenReturn(AGW_NAME)

@@ -31,10 +31,6 @@ class AzureLoadBalancerDescriptionSpec extends Specification {
   static final String LB_NAME = "myapp-main-v001"
   static final String LB_ID = "/subscriptions/sub1/resourceGroups/my-rg/providers/Microsoft.Network/loadBalancers/${LB_NAME}"
 
-  // -------------------------------------------------------------------------
-  // Hazard: loadBalancingRules() returns null — for-each on null throws NPE
-  // under @CompileStatic (generates Java for-each, not Groovy's null-safe each).
-  // -------------------------------------------------------------------------
   def 'build tolerates null loadBalancingRules'() {
     given: 'a load balancer whose loadBalancingRules() returns null'
     def lb = buildMinimalLb()
@@ -48,9 +44,6 @@ class AzureLoadBalancerDescriptionSpec extends Specification {
     description.loadBalancingRules.isEmpty()
   }
 
-  // -------------------------------------------------------------------------
-  // Hazard: rule.backendAddressPool() returns null — .id() on null throws NPE.
-  // -------------------------------------------------------------------------
   def 'build tolerates a routing rule with null backendAddressPool'() {
     given: 'a rule that has no backendAddressPool reference'
     def lb = buildMinimalLb()
@@ -61,7 +54,7 @@ class AzureLoadBalancerDescriptionSpec extends Specification {
     Mockito.when(rule.probe()).thenReturn(null)
     Mockito.when(rule.loadDistribution()).thenReturn(null)
     Mockito.when(rule.idleTimeoutInMinutes()).thenReturn(4)
-    Mockito.when(rule.backendAddressPool()).thenReturn(null)  // null → NPE on .id()
+    Mockito.when(rule.backendAddressPool()).thenReturn(null)
     Mockito.when(rule.protocol()).thenReturn(TransportProtocol.TCP)
     Mockito.when(lb.loadBalancingRules()).thenReturn([rule])
 
@@ -74,9 +67,6 @@ class AzureLoadBalancerDescriptionSpec extends Specification {
     description.trafficEnabledSG == null
   }
 
-  // -------------------------------------------------------------------------
-  // Hazard: probes() returns null — for-each on null throws NPE under @CompileStatic.
-  // -------------------------------------------------------------------------
   def 'build tolerates null probes'() {
     given: 'a load balancer whose probes() returns null'
     def lb = buildMinimalLb()
@@ -90,9 +80,6 @@ class AzureLoadBalancerDescriptionSpec extends Specification {
     description.probes.isEmpty()
   }
 
-  // -------------------------------------------------------------------------
-  // Hazard: inboundNatRules() returns null — for-each on null throws NPE.
-  // -------------------------------------------------------------------------
   def 'build tolerates null inboundNatRules'() {
     given: 'a load balancer whose inboundNatRules() returns null'
     def lb = buildMinimalLb()
@@ -106,9 +93,6 @@ class AzureLoadBalancerDescriptionSpec extends Specification {
     description.inboundNATRules.isEmpty()
   }
 
-  // -------------------------------------------------------------------------
-  // Happy path: a fully-formed load balancer maps correctly.
-  // -------------------------------------------------------------------------
   def 'build maps a complete load balancer to a description'() {
     given: 'a fully-populated load balancer with one rule, one probe, one NAT rule'
     def lb = buildMinimalLb()
@@ -152,9 +136,7 @@ class AzureLoadBalancerDescriptionSpec extends Specification {
     description.trafficEnabledSG == "myBackendPool"
   }
 
-  // -------------------------------------------------------------------------
   // Helper: minimal LoadBalancerInner mock with empty collections and basic tags.
-  // -------------------------------------------------------------------------
   private LoadBalancerInner buildMinimalLb() {
     def lb = Mockito.mock(LoadBalancerInner)
     Mockito.when(lb.name()).thenReturn(LB_NAME)
