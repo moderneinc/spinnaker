@@ -44,14 +44,14 @@ jobs:
     name: Build and Upload ${{ matrix.project }}
     runs-on: ubuntu-latest
     if: >-
-      github.event_name == 'push' ||
-      (matrix.project == 'clouddriver' && fromJSON(inputs.clouddriver)) ||
-      (matrix.project == 'echo'        && fromJSON(inputs.echo))        ||
-      (matrix.project == 'front50'     && fromJSON(inputs.front50))     ||
-      (matrix.project == 'gate'        && fromJSON(inputs.gate))        ||
-      (matrix.project == 'igor'        && fromJSON(inputs.igor))        ||
-      (matrix.project == 'orca'        && fromJSON(inputs.orca))        ||
-      (matrix.project == 'rosco'       && fromJSON(inputs.rosco))
+      github.event_name != 'workflow_dispatch' ||
+      (matrix.project == 'clouddriver' && inputs.clouddriver != 'false') ||
+      (matrix.project == 'echo'        && inputs.echo        != 'false') ||
+      (matrix.project == 'front50'     && inputs.front50     != 'false') ||
+      (matrix.project == 'gate'        && inputs.gate        != 'false') ||
+      (matrix.project == 'igor'        && inputs.igor        != 'false') ||
+      (matrix.project == 'orca'        && inputs.orca        != 'false') ||
+      (matrix.project == 'rosco'       && inputs.rosco       != 'false')
     strategy:
       fail-fast: false
       matrix:
@@ -82,7 +82,7 @@ jobs:
   build-and-upload-deck:
     name: Build and Upload Deck
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || fromJSON(inputs.deck)
+    if: github.event_name != 'workflow_dispatch' || inputs.deck != 'false'
 
     steps:
       - name: Checkout Code
