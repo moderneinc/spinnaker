@@ -19,7 +19,7 @@ runs:
     - uses: actions/setup-java@v4
       with:
         java-version: 17
-        distribution: 'zulu'
+        distribution: 'temurin'
         cache: gradle
 
     # Build the distribution

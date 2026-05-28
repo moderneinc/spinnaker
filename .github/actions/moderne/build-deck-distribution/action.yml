@@ -16,7 +16,7 @@ runs:
     - uses: actions/setup-java@v4
       with:
         java-version: 17
-        distribution: 'zulu'
+        distribution: 'temurin'
         cache: gradle
 
     # Set up nodejs if a package.json file is present in that project
