@@ -59,7 +59,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build Distribution
         uses: ./.github/actions/moderne/build-distribution
@@ -86,7 +86,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build Deck Distribution
         uses: ./.github/actions/moderne/build-deck-distribution
