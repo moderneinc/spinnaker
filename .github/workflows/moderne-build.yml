@@ -43,15 +43,6 @@ jobs:
   build-and-upload:
     name: Build and Upload ${{ matrix.project }}
     runs-on: ubuntu-latest
-    if: >-
-      github.event_name != 'workflow_dispatch' ||
-      (matrix.project == 'clouddriver' && inputs.clouddriver != 'false') ||
-      (matrix.project == 'echo'        && inputs.echo        != 'false') ||
-      (matrix.project == 'front50'     && inputs.front50     != 'false') ||
-      (matrix.project == 'gate'        && inputs.gate        != 'false') ||
-      (matrix.project == 'igor'        && inputs.igor        != 'false') ||
-      (matrix.project == 'orca'        && inputs.orca        != 'false') ||
-      (matrix.project == 'rosco'       && inputs.rosco       != 'false')
     strategy:
       fail-fast: false
       matrix:
@@ -61,17 +52,37 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v6
 
+      - name: Check if enabled
+        id: check
+        run: |
+          ENABLED=true
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            case "${{ matrix.project }}" in
+              clouddriver) [[ "${{ inputs.clouddriver }}" == "false" ]] && ENABLED=false ;;
+              echo)        [[ "${{ inputs.echo }}"        == "false" ]] && ENABLED=false ;;
+              front50)     [[ "${{ inputs.front50 }}"     == "false" ]] && ENABLED=false ;;
+              gate)        [[ "${{ inputs.gate }}"        == "false" ]] && ENABLED=false ;;
+              igor)        [[ "${{ inputs.igor }}"        == "false" ]] && ENABLED=false ;;
+              orca)        [[ "${{ inputs.orca }}"        == "false" ]] && ENABLED=false ;;
+              rosco)       [[ "${{ inputs.rosco }}"       == "false" ]] && ENABLED=false ;;
+            esac
+          fi
+          echo "enabled=$ENABLED" >> $GITHUB_OUTPUT
+
       - name: Build Distribution
+        if: steps.check.outputs.enabled == 'true'
         uses: ./.github/actions/moderne/build-distribution
         with:
           project: ${{ matrix.project }}
 
       - name: Tar Distribution
+        if: steps.check.outputs.enabled == 'true'
         uses: ./.github/actions/moderne/tar-distribution
         with:
           project: ${{ matrix.project }}
 
       - name: Publish Tarball to S3
+        if: steps.check.outputs.enabled == 'true'
         uses: ./.github/actions/moderne/publish-s3-bucket
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
