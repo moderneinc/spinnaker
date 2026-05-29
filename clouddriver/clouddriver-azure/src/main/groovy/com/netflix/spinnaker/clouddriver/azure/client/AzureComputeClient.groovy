@@ -156,7 +156,7 @@ public class AzureComputeClient extends AzureBaseClient {
    * @param location - filter for images to given location
    * @return List of AzureVMImages
    */
-  List<AzureVMImage> getVMImagesAll(String location) {
+  List<AzureVMImage> getVMImagesAll(String location, List<String> allowedPublishers = []) {
     def result = [] as List<AzureVMImage>
     try {
       List<VirtualMachinePublisher> publishers = executeOp({
@@ -166,6 +166,10 @@ public class AzureComputeClient extends AzureBaseClient {
           .asList()
       })
 
+      if (allowedPublishers) {
+        def allowedLower = allowedPublishers*.toLowerCase() as Set
+        publishers = publishers.findAll { allowedLower.contains(it.name().toLowerCase()) }
+      }
 
       log.info("getVMImagesAll-> Found ${publishers.size()} publisher items in azure/${location}")
 

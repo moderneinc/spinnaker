@@ -48,6 +48,7 @@ class AzureVMImageCachingAgent implements CachingAgent, CustomScheduledAgent, Ac
   final AzureCredentials creds
   final String region
   final ObjectMapper objectMapper
+  final List<String> allowedPublishers
 
   final long pollIntervalMillis
   final long timeoutMillis
@@ -60,8 +61,9 @@ class AzureVMImageCachingAgent implements CachingAgent, CustomScheduledAgent, Ac
                            String accountName,
                            AzureCredentials creds,
                            String region,
-                           ObjectMapper objectMapper) {
-    this(azureCloudProvider, accountName, creds, region, objectMapper, DEFAULT_POLL_INTERVAL_MILLIS, DEFAULT_TIMEOUT_MILLIS)
+                           ObjectMapper objectMapper,
+                           List<String> allowedPublishers = []) {
+    this(azureCloudProvider, accountName, creds, region, objectMapper, allowedPublishers, DEFAULT_POLL_INTERVAL_MILLIS, DEFAULT_TIMEOUT_MILLIS)
   }
 
   AzureVMImageCachingAgent(AzureCloudProvider azureCloudProvider,
@@ -69,6 +71,7 @@ class AzureVMImageCachingAgent implements CachingAgent, CustomScheduledAgent, Ac
                            AzureCredentials creds,
                            String region,
                            ObjectMapper objectMapper,
+                           List<String> allowedPublishers,
                            long pollIntervalMillis,
                            long timeoutMillis) {
     this.azureCloudProvider = azureCloudProvider
@@ -76,6 +79,7 @@ class AzureVMImageCachingAgent implements CachingAgent, CustomScheduledAgent, Ac
     this.creds = creds
     this.region = region
     this.objectMapper = objectMapper
+    this.allowedPublishers = allowedPublishers ?: []
     this.pollIntervalMillis = pollIntervalMillis
     this.timeoutMillis = timeoutMillis
   }
@@ -104,7 +108,7 @@ class AzureVMImageCachingAgent implements CachingAgent, CustomScheduledAgent, Ac
   CacheResult loadData(ProviderCache providerCache) {
     log.info("Describing items in ${agentType}")
 
-    def vmImages = creds.computeClient.getVMImagesAll(region)
+    def vmImages = creds.computeClient.getVMImagesAll(region, allowedPublishers)
 
     List<CacheData> data = vmImages.collect() { AzureVMImage vmImage ->
       Map<String, Object> attributes = [vmimage: vmImage]
