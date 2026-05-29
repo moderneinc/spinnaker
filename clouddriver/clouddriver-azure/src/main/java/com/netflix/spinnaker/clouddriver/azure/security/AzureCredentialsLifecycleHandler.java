@@ -102,12 +102,7 @@ public class AzureCredentialsLifecycleHandler
 
               agents.add(
                   new AzureVMImageCachingAgent(
-                      azureCloudProvider,
-                      accountName,
-                      creds,
-                      regionName,
-                      objectMapper,
-                      credentials.getVmImagePublishers()));
+                      azureCloudProvider, accountName, creds, regionName, objectMapper));
 
               agents.add(
                   new AzureCustomImageCachingAgent(

@@ -46,8 +46,11 @@ public class AzureComputeClient extends AzureBaseClient {
 
   public static final long DEFAULT_SERVER_WAIT_TIMEOUT_MILLIS = 2 * 60 * 60 * 1000
 
-  AzureComputeClient(String subscriptionId, TokenCredential credentials, AzureProfile azureProfile) {
+  final List<String> allowedPublishers
+
+  AzureComputeClient(String subscriptionId, TokenCredential credentials, AzureProfile azureProfile, List<String> allowedPublishers = []) {
     super(subscriptionId, azureProfile, credentials)
+    this.allowedPublishers = allowedPublishers ?: []
   }
 
 
@@ -156,7 +159,7 @@ public class AzureComputeClient extends AzureBaseClient {
    * @param location - filter for images to given location
    * @return List of AzureVMImages
    */
-  List<AzureVMImage> getVMImagesAll(String location, List<String> allowedPublishers = []) {
+  List<AzureVMImage> getVMImagesAll(String location) {
     def result = [] as List<AzureVMImage>
     try {
       List<VirtualMachinePublisher> publishers = executeOp({

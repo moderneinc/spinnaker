@@ -103,7 +103,7 @@ public class AzureNamedAccountCredentials extends AbstractAccountCredentials<Azu
   }
 
   private AzureCredentials buildCredentials() {
-    new AzureCredentials(this.tenantId, this.clientId, this.appKey, this.subscriptionId, this.defaultKeyVault, this.defaultResourceGroup, this.applicationName, this.environment, this.useSshPublicKey)
+    new AzureCredentials(this.tenantId, this.clientId, this.appKey, this.subscriptionId, this.defaultKeyVault, this.defaultResourceGroup, this.applicationName, this.environment, this.useSshPublicKey, this.vmImagePublishers)
   }
 
   private static List<AzureVMImage> buildPreferredVMImageList(List<AzureVMImage> vmImages) {
