@@ -27,7 +27,9 @@ import com.netflix.spinnaker.clouddriver.data.task.TaskRepository
 import com.netflix.spinnaker.clouddriver.orchestration.AtomicOperation
 import com.netflix.spinnaker.clouddriver.azure.resources.servergroup.model.EnableDisableDestroyAzureServerGroupDescription
 import com.netflix.spinnaker.clouddriver.orchestration.AtomicOperationException
+import groovy.util.logging.Slf4j
 
+@Slf4j
 class DestroyAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
   private static final String BASE_PHASE = "DESTROY_SERVER_GROUP"
 
@@ -146,11 +148,16 @@ class DestroyAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
       task.updateStatus BASE_PHASE, "Destroy Azure Server Group Operation for ${description.name} succeeded."
       onDemandCacheUpdaters.each {
         if (it.handles(OnDemandType.ServerGroup, AzureCloudProvider.ID)) {
-          it.handle(OnDemandType.ServerGroup, AzureCloudProvider.ID, [
-            serverGroupName: description.name,
-            account        : description.accountName,
-            region         : region
-          ])
+          try {
+            it.handle(OnDemandType.ServerGroup, AzureCloudProvider.ID, [
+              serverGroupName: description.name,
+              account        : description.accountName,
+              region         : region
+            ])
+          } catch (Exception e) {
+            // best-effort: background sweep reconciles within ~60s regardless
+            log.warn("Failed to evict ${description.name} from on-demand cache after destroy: ${e.message}")
+          }
         }
       }
     } else {

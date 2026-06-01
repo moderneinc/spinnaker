@@ -143,4 +143,21 @@ class DestroyAzureServerGroupAtomicOperationUnitSpec extends Specification {
       region         : REGION
     ])
   }
+
+  void "destroy succeeds even when on-demand cache eviction throws"() {
+    given:
+    def serverGroupDescription = new AzureServerGroupDescription(storageAccountNames: [], enableInboundNAT: false, hasNewSubnet: false)
+    computeClient.getServerGroup(RESOURCE_GROUP, SERVER_GROUP_NAME) >> serverGroupDescription
+    onDemandCacheUpdater.handle(_, _, _) >> { throw new RuntimeException("Azure 429 throttled") }
+
+    @Subject
+    def operation = new DestroyAzureServerGroupAtomicOperation(description, [onDemandCacheUpdater])
+
+    when:
+    operation.operate([])
+
+    then:
+    1 * computeClient.destroyServerGroup(RESOURCE_GROUP, SERVER_GROUP_NAME)
+    noExceptionThrown()
+  }
 }
