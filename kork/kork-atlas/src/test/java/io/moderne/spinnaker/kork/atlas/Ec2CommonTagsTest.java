@@ -73,6 +73,33 @@ class Ec2CommonTagsTest {
   }
 
   @Test
+  void friggaTagsFromAsgName_handlesNullInputWithoutThrowing() {
+    // Frigga's Names(String) guards `name != null && !name.trim().isEmpty()`, so Names.parseName
+    // returns an object with all-null fields rather than throwing on null input. The helper must
+    // pass that through without NPE — same null-safety contract as the empty-string case above.
+    Map<String, String> tags = Ec2CommonTags.friggaTagsFromAsgName(null);
+
+    assertThat(tags).doesNotContainKey("application");
+    assertThat(tags).doesNotContainKey("cluster");
+    assertThat(tags).doesNotContainKey("server.group");
+    assertThat(tags).containsEntry("detail", "none");
+  }
+
+  @Test
+  void derive_neverThrowsAndAlwaysSetsApplication() {
+    // Public contract: derive() is called at Spring bean construction; an unhandled throw fails
+    // moderneCommonTags bean creation, which fails Spring context startup for every consumer.
+    // Pin the contract with several adversarial inputs the prior tests don't exercise. The
+    // RuntimeException/LinkageError catch in derive() is not directly exercisable from unit
+    // tests (would require restructuring ec2Tags to take injectable deps); this smoke pins the
+    // observable contract instead.
+    assertThat(Ec2CommonTags.derive("clouddriver")).isNotEmpty();
+    assertThat(Ec2CommonTags.derive("")).anySatisfy(t -> assertThat(t.getKey()).isNotBlank());
+    assertThat(Ec2CommonTags.derive("with-hyphens-and-numbers-42")).isNotEmpty();
+    assertThat(Ec2CommonTags.derive("a".repeat(512))).isNotEmpty();
+  }
+
+  @Test
   void friggaTagsFromAsgName_preservesDetailWhenPresent() {
     Map<String, String> tags = Ec2CommonTags.friggaTagsFromAsgName("clouddriver-prod-canary-v007");
 

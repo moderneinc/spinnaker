@@ -15,6 +15,7 @@ import java.util.Map;
 import org.kohsuke.randname.RandomNameGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.regions.internal.util.EC2MetadataUtils;
 import software.amazon.awssdk.services.ec2.Ec2Client;
 import software.amazon.awssdk.services.ec2.model.DescribeTagsRequest;
@@ -58,11 +59,13 @@ public final class Ec2CommonTags {
     Map<String, String> map;
     try {
       map = imdsReachable() ? ec2Tags(applicationName) : fallbackTags(applicationName);
-    } catch (RuntimeException e) {
+    } catch (Exception | LinkageError e) {
       // Defense-in-depth: any unhandled throw from EC2MetadataUtils (internal AWS SDK API,
-      // e.g. SdkClientException when AWS_EC2_METADATA_DISABLED=true) or Ec2Client construction
-      // must not break Spring context startup. Fall back to dev tags so the application tag is
-      // still present and metrics still flow with degraded shape.
+      // e.g. SdkClientException when AWS_EC2_METADATA_DISABLED=true) or Ec2Client class loading
+      // (e.g. NoClassDefFoundError if a transitive SDK module is missing) must not break Spring
+      // context startup. LinkageError is included alongside Exception because classpath drift
+      // around the AWS SDK is a realistic failure mode; JVM-fatal Errors (OOM, StackOverflow)
+      // are deliberately not caught.
       log.warn("Failed to derive EC2 common tags; falling back to dev tags", e);
       map = fallbackTags(applicationName);
     }
@@ -108,17 +111,23 @@ public final class Ec2CommonTags {
 
     // Discover ASG name via DescribeTags filtered on the instance id;
     // Frigga-parse it to fill in application/cluster/stack/detail/server.group.
-    try (Ec2Client ec2Client = Ec2Client.create()) {
-      DescribeTagsRequest request =
-          DescribeTagsRequest.builder()
-              .filters(Filter.builder().name("resource-id").values(instanceId).build())
-              .build();
-      ec2Client.describeTags(request).tags().stream()
-          .filter(tag -> "aws:autoscaling:groupName".equals(tag.key()))
-          .findFirst()
-          .ifPresent(tag -> tags.putAll(friggaTagsFromAsgName(tag.value())));
-    } catch (Exception e) {
-      log.warn("Failed to fetch ASG name via DescribeTags", e);
+    // Skip when instanceId or region is missing: instanceId-null would NPE in Filter builder
+    // validation and would burn an EC2 API call against a throttled endpoint; region-null would
+    // make Ec2Client.builder() re-walk the SDK region-resolution chain (incl. another IMDS hit
+    // with longer SDK timeouts), which on a flaky-IMDS instance hangs startup for seconds.
+    if (instanceId != null && region != null) {
+      try (Ec2Client ec2Client = Ec2Client.builder().region(Region.of(region)).build()) {
+        DescribeTagsRequest request =
+            DescribeTagsRequest.builder()
+                .filters(Filter.builder().name("resource-id").values(instanceId).build())
+                .build();
+        ec2Client.describeTags(request).tags().stream()
+            .filter(tag -> "aws:autoscaling:groupName".equals(tag.key()))
+            .findFirst()
+            .ifPresent(tag -> tags.putAll(friggaTagsFromAsgName(tag.value())));
+      } catch (Exception e) {
+        log.warn("Failed to fetch ASG name via DescribeTags", e);
+      }
     }
 
     // If Frigga didn't surface an application (helper skips null/blank entries entirely),
