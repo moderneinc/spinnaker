@@ -18,13 +18,14 @@ dependencies {
   implementation "software.amazon.awssdk:regions"
   implementation "org.kohsuke:wordnet-random-name:1.9"
 
-  runtimeOnly "io.micrometer:micrometer-registry-atlas"
-
   compileOnly "io.micrometer:micrometer-core"
+  compileOnly "io.micrometer:micrometer-registry-atlas"
   compileOnly "org.springframework.boot:spring-boot-autoconfigure"
+  compileOnly "org.springframework.boot:spring-boot-actuator-autoconfigure"
 
   testImplementation "org.springframework.boot:spring-boot-test"
   testImplementation "org.springframework.boot:spring-boot-test-autoconfigure"
+  testImplementation "org.springframework.boot:spring-boot-actuator-autoconfigure"
   testImplementation "io.micrometer:micrometer-registry-atlas"
   testImplementation "org.assertj:assertj-core"
   testImplementation "org.junit.jupiter:junit-jupiter-api"
