@@ -1,5 +1,6 @@
 package io.moderne.spinnaker.kork.atlas;
 
+import com.netflix.frigga.Names;
 import org.kohsuke.randname.RandomNameGenerator;
 
 import java.net.InetAddress;
@@ -18,6 +19,20 @@ public final class Ec2CommonTags {
         tags.put("environment", "local");
         tags.put("instance.id", hostname());
         tags.put("instance.display.name", new RandomNameGenerator().next());
+        return tags;
+    }
+
+    static Map<String, String> friggaTagsFromAsgName(String asgName) {
+        Names names = Names.parseName(asgName);
+        Map<String, String> tags = new LinkedHashMap<>();
+        tags.put("application", names.getApp());
+        tags.put("cluster", names.getCluster());
+        if (names.getStack() != null && !names.getStack().isBlank()) {
+            tags.put("stack", names.getStack());
+        }
+        String detail = names.getDetail();
+        tags.put("detail", (detail != null && !detail.isBlank()) ? detail : "none");
+        tags.put("server.group", names.getGroup());
         return tags;
     }
 

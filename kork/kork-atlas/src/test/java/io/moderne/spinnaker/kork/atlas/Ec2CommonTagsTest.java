@@ -23,6 +23,37 @@ class Ec2CommonTagsTest {
         assertThat(tags.get("instance.id")).isEqualTo(expectedHostname());
     }
 
+    @Test
+    void friggaTagsFromAsgName_parsesFullAsgName() {
+        Map<String, String> tags = Ec2CommonTags.friggaTagsFromAsgName("clouddriver-prod-v001");
+
+        assertThat(tags).containsEntry("application", "clouddriver");
+        assertThat(tags).containsEntry("cluster", "clouddriver-prod");
+        assertThat(tags).containsEntry("stack", "prod");
+        assertThat(tags).containsEntry("detail", "none");
+        assertThat(tags).containsEntry("server.group", "clouddriver-prod-v001");
+    }
+
+    @Test
+    void friggaTagsFromAsgName_handlesNoStackOrSequence() {
+        Map<String, String> tags = Ec2CommonTags.friggaTagsFromAsgName("clouddriver");
+
+        assertThat(tags).containsEntry("application", "clouddriver");
+        assertThat(tags).containsEntry("cluster", "clouddriver");
+        assertThat(tags).containsEntry("detail", "none");
+        assertThat(tags).containsEntry("server.group", "clouddriver");
+    }
+
+    @Test
+    void friggaTagsFromAsgName_preservesDetailWhenPresent() {
+        Map<String, String> tags = Ec2CommonTags.friggaTagsFromAsgName("clouddriver-prod-canary-v007");
+
+        assertThat(tags).containsEntry("application", "clouddriver");
+        assertThat(tags).containsEntry("stack", "prod");
+        assertThat(tags).containsEntry("detail", "canary");
+        assertThat(tags).containsEntry("server.group", "clouddriver-prod-canary-v007");
+    }
+
     private static String expectedHostname() {
         try {
             return InetAddress.getLocalHost().getHostName();
