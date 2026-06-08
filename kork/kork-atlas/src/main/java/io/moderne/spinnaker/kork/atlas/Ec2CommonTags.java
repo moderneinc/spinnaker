@@ -4,6 +4,12 @@ import com.netflix.frigga.Names;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Tags;
 import org.kohsuke.randname.RandomNameGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.regions.internal.util.EC2MetadataUtils;
+import software.amazon.awssdk.services.ec2.Ec2Client;
+import software.amazon.awssdk.services.ec2.model.DescribeTagsRequest;
+import software.amazon.awssdk.services.ec2.model.Filter;
 
 import java.net.InetAddress;
 import java.net.URI;
@@ -19,6 +25,8 @@ import java.util.stream.Collectors;
 public final class Ec2CommonTags {
 
     private Ec2CommonTags() {}
+
+    private static final Logger log = LoggerFactory.getLogger(Ec2CommonTags.class);
 
     static Map<String, String> fallbackTags(String applicationName) {
         Map<String, String> tags = new LinkedHashMap<>();
@@ -70,8 +78,47 @@ public final class Ec2CommonTags {
     }
 
     static Map<String, String> ec2Tags(String applicationName) {
-        // Implemented in Task 5
-        throw new UnsupportedOperationException("ec2Tags() not yet implemented");
+        Map<String, String> tags = new LinkedHashMap<>();
+        tags.put("cloud.provider", "aws");
+
+        String instanceId = EC2MetadataUtils.getInstanceId();
+        if (instanceId != null) {
+            tags.put("instance.id", instanceId);
+        }
+        String region = EC2MetadataUtils.getEC2InstanceRegion();
+        tags.put("region", region != null ? region : "unknown");
+        String az = EC2MetadataUtils.getAvailabilityZone();
+        if (az != null) {
+            tags.put("availability.zone", az);
+        }
+        tags.put("instance.display.name", new RandomNameGenerator().next());
+
+        // Discover ASG name via DescribeTags filtered on the instance id;
+        // Frigga-parse it to fill in application/cluster/stack/detail/server.group.
+        try (Ec2Client ec2Client = Ec2Client.create()) {
+            DescribeTagsRequest request = DescribeTagsRequest.builder()
+                    .filters(Filter.builder()
+                            .name("resource-id")
+                            .values(instanceId)
+                            .build())
+                    .build();
+            ec2Client.describeTags(request).tags().stream()
+                    .filter(tag -> "aws:autoscaling:groupName".equals(tag.key()))
+                    .findFirst()
+                    .ifPresent(tag -> tags.putAll(friggaTagsFromAsgName(tag.value())));
+        } catch (Exception e) {
+            log.warn("Failed to fetch ASG name via DescribeTags: {}", e.getMessage());
+        }
+
+        // If Frigga didn't surface an application (key missing OR value null — the
+        // helper does putAll, so a null app from Frigga sits in the map with key
+        // present, which would silently bypass putIfAbsent), fall back to
+        // spring.application.name so the application tag is never null/missing.
+        if (tags.get("application") == null) {
+            tags.put("application", applicationName);
+        }
+
+        return tags;
     }
 
     private static String hostname() {
