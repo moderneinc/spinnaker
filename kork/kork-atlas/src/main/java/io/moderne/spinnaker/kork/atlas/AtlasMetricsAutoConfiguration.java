@@ -9,6 +9,7 @@ import org.springframework.boot.actuate.autoconfigure.metrics.MeterRegistryCusto
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.PropertySource;
 
 /**
  * Wires Micrometer common tags and an Atlas-specific {@code baseUnit} tag customizer for forked
@@ -21,6 +22,7 @@ import org.springframework.context.annotation.Bean;
  */
 @AutoConfiguration
 @ConditionalOnClass(AtlasMeterRegistry.class)
+@PropertySource("classpath:kork-atlas.properties")
 public class AtlasMetricsAutoConfiguration {
 
   @Bean
