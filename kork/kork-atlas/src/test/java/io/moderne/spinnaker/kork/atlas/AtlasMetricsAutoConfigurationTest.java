@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.config.MeterFilter;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.actuate.autoconfigure.metrics.MeterRegistryCustomizer;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,5 +31,15 @@ class AtlasMetricsAutoConfigurationTest {
             assertThat(context.getBean("atlasBaseUnitTagCustomizer"))
                     .isInstanceOf(MeterRegistryCustomizer.class);
         });
+    }
+
+    @Test
+    void neitherBeanIsWiredWhenAtlasRegistryIsAbsent() {
+        contextRunner
+                .withClassLoader(new FilteredClassLoader(AtlasMeterRegistry.class))
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean("moderneCommonTags");
+                    assertThat(context).doesNotHaveBean("atlasBaseUnitTagCustomizer");
+                });
     }
 }
