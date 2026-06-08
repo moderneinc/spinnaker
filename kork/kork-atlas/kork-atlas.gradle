@@ -18,8 +18,8 @@ dependencies {
   implementation "software.amazon.awssdk:regions"
   implementation "org.kohsuke:wordnet-random-name:1.9"
 
-  compileOnly "io.micrometer:micrometer-core"
-  compileOnly "io.micrometer:micrometer-registry-atlas"
+  api "io.micrometer:micrometer-registry-atlas"
+  api "io.micrometer:micrometer-core"
   compileOnly "org.springframework.boot:spring-boot-autoconfigure"
   compileOnly "org.springframework.boot:spring-boot-actuator-autoconfigure"
 
