@@ -12,7 +12,6 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 import org.kohsuke.randname.RandomNameGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,24 +39,34 @@ public final class Ec2CommonTags {
   static Map<String, String> friggaTagsFromAsgName(String asgName) {
     Names names = Names.parseName(asgName);
     Map<String, String> tags = new LinkedHashMap<>();
-    tags.put("application", names.getApp());
-    tags.put("cluster", names.getCluster());
-    if (names.getStack() != null && !names.getStack().isBlank()) {
-      tags.put("stack", names.getStack());
-    }
+    putIfNotBlank(tags, "application", names.getApp());
+    putIfNotBlank(tags, "cluster", names.getCluster());
+    putIfNotBlank(tags, "stack", names.getStack());
     String detail = names.getDetail();
     tags.put("detail", (detail != null && !detail.isBlank()) ? detail : "none");
-    tags.put("server.group", names.getGroup());
+    putIfNotBlank(tags, "server.group", names.getGroup());
     return tags;
   }
 
+  private static void putIfNotBlank(Map<String, String> tags, String key, String value) {
+    if (value != null && !value.isBlank()) {
+      tags.put(key, value);
+    }
+  }
+
   public static Tags derive(String applicationName) {
-    Map<String, String> map =
-        imdsReachable() ? ec2Tags(applicationName) : fallbackTags(applicationName);
-    return Tags.of(
-        map.entrySet().stream()
-            .map(e -> Tag.of(e.getKey(), e.getValue()))
-            .collect(Collectors.toList()));
+    Map<String, String> map;
+    try {
+      map = imdsReachable() ? ec2Tags(applicationName) : fallbackTags(applicationName);
+    } catch (RuntimeException e) {
+      // Defense-in-depth: any unhandled throw from EC2MetadataUtils (internal AWS SDK API,
+      // e.g. SdkClientException when AWS_EC2_METADATA_DISABLED=true) or Ec2Client construction
+      // must not break Spring context startup. Fall back to dev tags so the application tag is
+      // still present and metrics still flow with degraded shape.
+      log.warn("Failed to derive EC2 common tags; falling back to dev tags", e);
+      map = fallbackTags(applicationName);
+    }
+    return Tags.of(map.entrySet().stream().map(e -> Tag.of(e.getKey(), e.getValue())).toList());
   }
 
   private static boolean imdsReachable() {
@@ -73,6 +82,9 @@ public final class Ec2CommonTags {
       HttpResponse<String> response =
           client.send(tokenRequest, HttpResponse.BodyHandlers.ofString());
       return response.statusCode() == 200;
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      return false;
     } catch (Exception e) {
       return false;
     }
@@ -106,16 +118,12 @@ public final class Ec2CommonTags {
           .findFirst()
           .ifPresent(tag -> tags.putAll(friggaTagsFromAsgName(tag.value())));
     } catch (Exception e) {
-      log.warn("Failed to fetch ASG name via DescribeTags: {}", e.getMessage());
+      log.warn("Failed to fetch ASG name via DescribeTags", e);
     }
 
-    // If Frigga didn't surface an application (key missing OR value null — the
-    // helper does putAll, so a null app from Frigga sits in the map with key
-    // present, which would silently bypass putIfAbsent), fall back to
-    // spring.application.name so the application tag is never null/missing.
-    if (tags.get("application") == null) {
-      tags.put("application", applicationName);
-    }
+    // If Frigga didn't surface an application (helper skips null/blank entries entirely),
+    // fall back to spring.application.name so the application tag is never missing.
+    tags.putIfAbsent("application", applicationName);
 
     return tags;
   }

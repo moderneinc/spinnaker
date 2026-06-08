@@ -58,6 +58,21 @@ class Ec2CommonTagsTest {
   }
 
   @Test
+  void friggaTagsFromAsgName_omitsNullKeysEntirelyWhenFriggaCannotParse() {
+    // Frigga's Names.parseName returns all-null fields for input that doesn't match
+    // its NAME_PATTERN. The helper must NOT propagate nulls into the map — they'd blow up
+    // Tag.of downstream and fail Spring context startup for every consumer service.
+    Map<String, String> tags = Ec2CommonTags.friggaTagsFromAsgName("");
+
+    assertThat(tags).doesNotContainKey("application");
+    assertThat(tags).doesNotContainKey("cluster");
+    assertThat(tags).doesNotContainKey("stack");
+    assertThat(tags).doesNotContainKey("server.group");
+    // detail still defaults to "none" so the Atlas tag set always carries one
+    assertThat(tags).containsEntry("detail", "none");
+  }
+
+  @Test
   void friggaTagsFromAsgName_preservesDetailWhenPresent() {
     Map<String, String> tags = Ec2CommonTags.friggaTagsFromAsgName("clouddriver-prod-canary-v007");
 
