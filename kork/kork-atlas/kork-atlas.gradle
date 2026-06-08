@@ -20,6 +20,7 @@ dependencies {
 
   runtimeOnly "io.micrometer:micrometer-registry-atlas"
 
+  compileOnly "io.micrometer:micrometer-core"
   compileOnly "org.springframework.boot:spring-boot-autoconfigure"
 
   testImplementation "org.springframework.boot:spring-boot-test"

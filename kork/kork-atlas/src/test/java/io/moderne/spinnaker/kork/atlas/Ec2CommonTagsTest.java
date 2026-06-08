@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,6 +43,19 @@ class Ec2CommonTagsTest {
         assertThat(tags).containsEntry("cluster", "clouddriver");
         assertThat(tags).containsEntry("detail", "none");
         assertThat(tags).containsEntry("server.group", "clouddriver");
+    }
+
+    @Test
+    void derive_offEc2ProducesFallbackTags() {
+        io.micrometer.core.instrument.Tags tags = Ec2CommonTags.derive("clouddriver");
+
+        // Tags is iterable — convert to map for assertions
+        Map<String, String> asMap = new LinkedHashMap<>();
+        tags.forEach(t -> asMap.put(t.getKey(), t.getValue()));
+
+        assertThat(asMap).containsEntry("cloud.provider", "none");
+        assertThat(asMap).containsEntry("application", "clouddriver");
+        assertThat(asMap).containsEntry("environment", "local");
     }
 
     @Test
