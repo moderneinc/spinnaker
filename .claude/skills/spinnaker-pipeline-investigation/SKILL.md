@@ -12,6 +12,12 @@ allowed-tools:
 
 # Spinnaker Pipeline Investigation
 
+## Prerequisites
+
+- AWS CLI configured with `labs` account credentials
+- SSM Session Manager access (`ssm:StartSession`) to the Spinnaker EC2 instance
+- Python 3 available via `uv run python3` (for the PTY wrapper)
+
 ## Overview
 
 The Gate API (`api-spinny.moderne.ninja`) requires Google OAuth — you cannot
