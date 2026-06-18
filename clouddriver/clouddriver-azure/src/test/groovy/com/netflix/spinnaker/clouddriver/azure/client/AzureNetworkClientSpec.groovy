@@ -16,12 +16,9 @@
 
 package com.netflix.spinnaker.clouddriver.azure.client
 
-import com.azure.core.http.HttpResponse
-import com.azure.core.management.exception.ManagementException
 import org.mockito.MockedStatic
 import org.mockito.Mockito
 import org.mockito.invocation.InvocationOnMock
-import spock.lang.Specification
 
 /**
  * Tests for AzureNetworkClient.getAppGateway exception-handling logic.
@@ -30,30 +27,13 @@ import spock.lang.Specification
  * allocate an instance via Unsafe (bypassing the constructor) and then use
  * Mockito.mockStatic to intercept the static AzureBaseClient.executeOp method.
  */
-class AzureNetworkClientSpec extends Specification {
+class AzureNetworkClientSpec extends AzureClientSpecBase {
 
   static final String RESOURCE_GROUP = "my-rg"
   static final String AGW_NAME = "myapp-main-v001"
 
-  /**
-   * Create a ManagementException that fakes a given HTTP status code.
-   */
-  private static ManagementException managementExceptionWithStatus(int statusCode) {
-    def httpResponse = Mockito.mock(HttpResponse)
-    Mockito.when(httpResponse.getStatusCode()).thenReturn(statusCode)
-    new ManagementException("Simulated ${statusCode}", httpResponse)
-  }
-
-  /**
-   * Allocate an AzureNetworkClient without running AzureBaseClient's constructor
-   * (which would try to contact Azure). The azure field is left null but that is
-   * fine because executeOp will be mocked out before getAppGateway calls it.
-   */
   private static AzureNetworkClient allocateClient() {
-    def f = sun.misc.Unsafe.getDeclaredField("theUnsafe")
-    f.accessible = true
-    def unsafe = f.get(null) as sun.misc.Unsafe
-    unsafe.allocateInstance(AzureNetworkClient) as AzureNetworkClient
+    getUnsafe().allocateInstance(AzureNetworkClient) as AzureNetworkClient
   }
 
   def 'getAppGateway returns null for a 404 ManagementException'() {
