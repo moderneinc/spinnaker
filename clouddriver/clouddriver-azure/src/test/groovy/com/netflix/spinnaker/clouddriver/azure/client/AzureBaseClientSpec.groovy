@@ -16,10 +16,7 @@
 
 package com.netflix.spinnaker.clouddriver.azure.client
 
-import com.azure.core.http.HttpResponse
 import com.azure.core.management.exception.ManagementException
-import org.mockito.Mockito
-import spock.lang.Specification
 import spock.lang.Unroll
 
 /**
@@ -28,13 +25,7 @@ import spock.lang.Unroll
  *
  * executeOp is a static method so no instance allocation is needed.
  */
-class AzureBaseClientSpec extends Specification {
-
-  private static ManagementException managementExceptionWithStatus(int statusCode) {
-    def httpResponse = Mockito.mock(HttpResponse)
-    Mockito.when(httpResponse.getStatusCode()).thenReturn(statusCode)
-    new ManagementException("Simulated ${statusCode}", httpResponse)
-  }
+class AzureBaseClientSpec extends AzureClientSpecBase {
 
   @Unroll
   def 'executeOp retries and succeeds after a transient #label'() {
