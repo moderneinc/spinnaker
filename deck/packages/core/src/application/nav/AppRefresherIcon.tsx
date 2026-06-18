@@ -16,11 +16,14 @@ export interface IAppRefreshIconProps {
 }
 
 export const AppRefresherIcon = ({ appName, lastRefresh, refresh, refreshing }: IAppRefreshIconProps) => {
-  const activeRefresher = SchedulerFactory.createScheduler(2000);
   const [timeSinceRefresh, setTimeSinceRefresh] = React.useState(relativeTime(lastRefresh));
   const [iconPulsing, setIconPulsing] = React.useState(false);
 
   React.useEffect(() => {
+    // Create the scheduler inside the effect so exactly one exists per mount/lastRefresh and is
+    // torn down on cleanup. Creating it in the render body leaked a timer plus
+    // visibilitychange/online/offline listeners on every re-render that did not change lastRefresh.
+    const activeRefresher = SchedulerFactory.createScheduler(2000);
     activeRefresher.subscribe(() => {
       setTimeSinceRefresh(relativeTime(lastRefresh));
     });
