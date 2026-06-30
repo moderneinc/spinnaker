@@ -36,6 +36,21 @@ public class AtlasMetricsAutoConfiguration {
     return registry -> registry.config().meterFilter(baseUnitMeterFilter());
   }
 
+  /**
+   * Defensive backstop: cap the number of distinct meters the Atlas registry will hold so a runaway
+   * high-cardinality source degrades gracefully (new meters denied) instead of growing the publish
+   * set until the JVM OOMs. Tune via {@code moderne.atlas.max-metrics}.
+   */
+  @Bean
+  MeterRegistryCustomizer<AtlasMeterRegistry> atlasMaxMetricsGuard(
+      @Value("${moderne.atlas.max-metrics:50000}") int maxMetrics) {
+    return registry -> registry.config().meterFilter(maximumMetricsFilter(maxMetrics));
+  }
+
+  static MeterFilter maximumMetricsFilter(int maxMetrics) {
+    return MeterFilter.maximumAllowableMetrics(maxMetrics);
+  }
+
   static MeterFilter baseUnitMeterFilter() {
     return new MeterFilter() {
       @Override

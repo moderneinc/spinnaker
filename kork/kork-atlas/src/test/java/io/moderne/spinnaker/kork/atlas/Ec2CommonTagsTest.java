@@ -18,8 +18,9 @@ class Ec2CommonTagsTest {
     assertThat(tags).containsEntry("application", "clouddriver");
     assertThat(tags).containsEntry("environment", "local");
     assertThat(tags).containsKey("instance.id");
-    assertThat(tags).containsKey("instance.display.name");
-    assertThat(tags.get("instance.display.name")).isNotBlank();
+    // instance.display.name is a per-process RandomNameGenerator value: unbounded cardinality
+    // (a fresh value every restart) with no diagnostic worth. It must not be emitted.
+    assertThat(tags).doesNotContainKey("instance.display.name");
     assertThat(tags.get("instance.id")).isEqualTo(expectedHostname());
   }
 
@@ -31,7 +32,10 @@ class Ec2CommonTagsTest {
     assertThat(tags).containsEntry("cluster", "clouddriver-prod");
     assertThat(tags).containsEntry("stack", "prod");
     assertThat(tags).containsEntry("detail", "none");
-    assertThat(tags).containsEntry("server.group", "clouddriver-prod-v001");
+    // server.group is the version-suffixed ASG name (e.g. ...-v001): unbounded common-tag
+    // cardinality, +1 distinct series every red/black deploy. cluster gives the stable
+    // grouping, so server.group must not be emitted as a common tag.
+    assertThat(tags).doesNotContainKey("server.group");
   }
 
   @Test
@@ -41,7 +45,7 @@ class Ec2CommonTagsTest {
     assertThat(tags).containsEntry("application", "clouddriver");
     assertThat(tags).containsEntry("cluster", "clouddriver");
     assertThat(tags).containsEntry("detail", "none");
-    assertThat(tags).containsEntry("server.group", "clouddriver");
+    assertThat(tags).doesNotContainKey("server.group");
   }
 
   @Test
@@ -106,7 +110,7 @@ class Ec2CommonTagsTest {
     assertThat(tags).containsEntry("application", "clouddriver");
     assertThat(tags).containsEntry("stack", "prod");
     assertThat(tags).containsEntry("detail", "canary");
-    assertThat(tags).containsEntry("server.group", "clouddriver-prod-canary-v007");
+    assertThat(tags).doesNotContainKey("server.group");
   }
 
   private static String expectedHostname() {

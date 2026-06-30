@@ -6,6 +6,7 @@ import io.micrometer.atlas.AtlasMeterRegistry;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.config.MeterFilter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.actuate.autoconfigure.metrics.MeterRegistryCustomizer;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -39,13 +40,24 @@ class AtlasMetricsAutoConfigurationTest {
   }
 
   @Test
-  void neitherBeanIsWiredWhenAtlasRegistryIsAbsent() {
+  void wiresMaxMetricsGuardWhenAtlasRegistryOnClasspath() {
+    contextRunner.run(
+        context -> {
+          assertThat(context).hasBean("atlasMaxMetricsGuard");
+          assertThat(context.getBean("atlasMaxMetricsGuard"))
+              .isInstanceOf(MeterRegistryCustomizer.class);
+        });
+  }
+
+  @Test
+  void noBeansAreWiredWhenAtlasRegistryIsAbsent() {
     contextRunner
         .withClassLoader(new FilteredClassLoader(AtlasMeterRegistry.class))
         .run(
             context -> {
               assertThat(context).doesNotHaveBean("moderneCommonTags");
               assertThat(context).doesNotHaveBean("atlasBaseUnitTagCustomizer");
+              assertThat(context).doesNotHaveBean("atlasMaxMetricsGuard");
             });
   }
 
@@ -80,5 +92,20 @@ class AtlasMetricsAutoConfigurationTest {
     Meter.Id mapped = AtlasMetricsAutoConfiguration.baseUnitMeterFilter().map(id);
 
     assertThat(mapped.getTag("baseUnit")).isNull();
+  }
+
+  @Test
+  void maximumMetricsFilter_deniesNewMetersBeyondTheConfiguredLimit() {
+    MeterFilter guard = AtlasMetricsAutoConfiguration.maximumMetricsFilter(2);
+    SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    registry.config().meterFilter(guard);
+
+    registry.counter("meter.one");
+    registry.counter("meter.two");
+    registry.counter("meter.three"); // beyond the cap — must be denied, not OOM the backend
+
+    assertThat(registry.find("meter.one").counter()).isNotNull();
+    assertThat(registry.find("meter.two").counter()).isNotNull();
+    assertThat(registry.find("meter.three").counter()).isNull();
   }
 }

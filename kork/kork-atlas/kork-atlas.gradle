@@ -16,7 +16,6 @@ dependencies {
 
   implementation "software.amazon.awssdk:ec2"
   implementation "software.amazon.awssdk:regions"
-  implementation "org.kohsuke:wordnet-random-name:1.9"
 
   api "io.micrometer:micrometer-registry-atlas"
   api "io.micrometer:micrometer-core"

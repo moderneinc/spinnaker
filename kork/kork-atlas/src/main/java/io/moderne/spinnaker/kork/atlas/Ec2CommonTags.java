@@ -12,7 +12,6 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.kohsuke.randname.RandomNameGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.regions.Region;
@@ -33,7 +32,6 @@ public final class Ec2CommonTags {
     tags.put("application", applicationName);
     tags.put("environment", "local");
     tags.put("instance.id", hostname());
-    tags.put("instance.display.name", new RandomNameGenerator().next());
     return tags;
   }
 
@@ -45,7 +43,6 @@ public final class Ec2CommonTags {
     putIfNotBlank(tags, "stack", names.getStack());
     String detail = names.getDetail();
     tags.put("detail", (detail != null && !detail.isBlank()) ? detail : "none");
-    putIfNotBlank(tags, "server.group", names.getGroup());
     return tags;
   }
 
@@ -107,10 +104,9 @@ public final class Ec2CommonTags {
     if (az != null) {
       tags.put("availability.zone", az);
     }
-    tags.put("instance.display.name", new RandomNameGenerator().next());
 
     // Discover ASG name via DescribeTags filtered on the instance id;
-    // Frigga-parse it to fill in application/cluster/stack/detail/server.group.
+    // Frigga-parse it to fill in application/cluster/stack/detail.
     // Skip when instanceId or region is missing: instanceId-null would NPE in Filter builder
     // validation and would burn an EC2 API call against a throttled endpoint; region-null would
     // make Ec2Client.builder() re-walk the SDK region-resolution chain (incl. another IMDS hit
