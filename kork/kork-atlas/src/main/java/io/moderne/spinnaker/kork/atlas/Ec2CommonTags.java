@@ -12,7 +12,6 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.kohsuke.randname.RandomNameGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.regions.Region;
@@ -33,7 +32,6 @@ public final class Ec2CommonTags {
     tags.put("application", applicationName);
     tags.put("environment", "local");
     tags.put("instance.id", hostname());
-    tags.put("instance.display.name", new RandomNameGenerator().next());
     return tags;
   }
 
@@ -45,6 +43,9 @@ public final class Ec2CommonTags {
     putIfNotBlank(tags, "stack", names.getStack());
     String detail = names.getDetail();
     tags.put("detail", (detail != null && !detail.isBlank()) ? detail : "none");
+    // server.group is the version-suffixed ASG name. Its cross-deploy growth is retention-bounded
+    // (old generations age out as their JVMs die) and the global meter cap is the OOM backstop, so
+    // it is kept for per-version attribution rather than dropped.
     putIfNotBlank(tags, "server.group", names.getGroup());
     return tags;
   }
@@ -107,7 +108,6 @@ public final class Ec2CommonTags {
     if (az != null) {
       tags.put("availability.zone", az);
     }
-    tags.put("instance.display.name", new RandomNameGenerator().next());
 
     // Discover ASG name via DescribeTags filtered on the instance id;
     // Frigga-parse it to fill in application/cluster/stack/detail/server.group.

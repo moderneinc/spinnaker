@@ -18,8 +18,9 @@ class Ec2CommonTagsTest {
     assertThat(tags).containsEntry("application", "clouddriver");
     assertThat(tags).containsEntry("environment", "local");
     assertThat(tags).containsKey("instance.id");
-    assertThat(tags).containsKey("instance.display.name");
-    assertThat(tags.get("instance.display.name")).isNotBlank();
+    // instance.display.name is a per-process RandomNameGenerator value: unbounded cardinality
+    // (a fresh value every restart) with no diagnostic worth. It must not be emitted.
+    assertThat(tags).doesNotContainKey("instance.display.name");
     assertThat(tags.get("instance.id")).isEqualTo(expectedHostname());
   }
 

@@ -4,6 +4,8 @@ import io.micrometer.atlas.AtlasMeterRegistry;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.config.MeterFilter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.actuate.autoconfigure.metrics.MeterRegistryCustomizer;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -25,6 +27,9 @@ import org.springframework.context.annotation.PropertySource;
 @PropertySource("classpath:kork-atlas.properties")
 public class AtlasMetricsAutoConfiguration {
 
+  private static final Logger log = LoggerFactory.getLogger(AtlasMetricsAutoConfiguration.class);
+  static final int DEFAULT_MAX_METRICS = 50_000;
+
   @Bean
   MeterFilter moderneCommonTags(
       @Value("${spring.application.name:unknown}") String applicationName) {
@@ -34,6 +39,40 @@ public class AtlasMetricsAutoConfiguration {
   @Bean
   MeterRegistryCustomizer<AtlasMeterRegistry> atlasBaseUnitTagCustomizer() {
     return registry -> registry.config().meterFilter(baseUnitMeterFilter());
+  }
+
+  /**
+   * Defensive backstop: cap the number of distinct meters the Atlas registry will hold so a runaway
+   * high-cardinality source degrades gracefully (new meters denied) instead of growing the publish
+   * set until the JVM OOMs. Tune via {@code moderne.atlas.max-metrics}; a non-positive value
+   * disables the cap rather than denying every meter.
+   */
+  @Bean
+  MeterRegistryCustomizer<AtlasMeterRegistry> atlasMaxMetricsGuard(
+      @Value("${moderne.atlas.max-metrics:50000}") String maxMetrics) {
+    return registry ->
+        registry.config().meterFilter(maximumMetricsFilter(parseMaxMetrics(maxMetrics)));
+  }
+
+  static int parseMaxMetrics(String value) {
+    try {
+      return Integer.parseInt(value.trim());
+    } catch (NumberFormatException | NullPointerException e) {
+      log.warn(
+          "Invalid moderne.atlas.max-metrics '{}'; using default {}", value, DEFAULT_MAX_METRICS);
+      return DEFAULT_MAX_METRICS;
+    }
+  }
+
+  static MeterFilter maximumMetricsFilter(int maxMetrics) {
+    if (maxMetrics <= 0) {
+      // A cap of 0 would deny the very first meter and silently zero out all telemetry. Treat any
+      // non-positive value as "disabled" so a misconfiguration degrades to no-cap, not no-metrics.
+      log.warn(
+          "moderne.atlas.max-metrics={} is non-positive; Atlas meter cap disabled", maxMetrics);
+      return new MeterFilter() {};
+    }
+    return MeterFilter.maximumAllowableMetrics(maxMetrics);
   }
 
   static MeterFilter baseUnitMeterFilter() {
