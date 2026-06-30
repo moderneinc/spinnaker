@@ -43,6 +43,10 @@ public final class Ec2CommonTags {
     putIfNotBlank(tags, "stack", names.getStack());
     String detail = names.getDetail();
     tags.put("detail", (detail != null && !detail.isBlank()) ? detail : "none");
+    // server.group is the version-suffixed ASG name. Its cross-deploy growth is retention-bounded
+    // (old generations age out as their JVMs die) and the global meter cap is the OOM backstop, so
+    // it is kept for per-version attribution rather than dropped.
+    putIfNotBlank(tags, "server.group", names.getGroup());
     return tags;
   }
 
@@ -106,7 +110,7 @@ public final class Ec2CommonTags {
     }
 
     // Discover ASG name via DescribeTags filtered on the instance id;
-    // Frigga-parse it to fill in application/cluster/stack/detail.
+    // Frigga-parse it to fill in application/cluster/stack/detail/server.group.
     // Skip when instanceId or region is missing: instanceId-null would NPE in Filter builder
     // validation and would burn an EC2 API call against a throttled endpoint; region-null would
     // make Ec2Client.builder() re-walk the SDK region-resolution chain (incl. another IMDS hit

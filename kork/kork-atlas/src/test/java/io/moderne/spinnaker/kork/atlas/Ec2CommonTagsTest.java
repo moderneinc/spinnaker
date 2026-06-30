@@ -32,10 +32,7 @@ class Ec2CommonTagsTest {
     assertThat(tags).containsEntry("cluster", "clouddriver-prod");
     assertThat(tags).containsEntry("stack", "prod");
     assertThat(tags).containsEntry("detail", "none");
-    // server.group is the version-suffixed ASG name (e.g. ...-v001): unbounded common-tag
-    // cardinality, +1 distinct series every red/black deploy. cluster gives the stable
-    // grouping, so server.group must not be emitted as a common tag.
-    assertThat(tags).doesNotContainKey("server.group");
+    assertThat(tags).containsEntry("server.group", "clouddriver-prod-v001");
   }
 
   @Test
@@ -45,7 +42,7 @@ class Ec2CommonTagsTest {
     assertThat(tags).containsEntry("application", "clouddriver");
     assertThat(tags).containsEntry("cluster", "clouddriver");
     assertThat(tags).containsEntry("detail", "none");
-    assertThat(tags).doesNotContainKey("server.group");
+    assertThat(tags).containsEntry("server.group", "clouddriver");
   }
 
   @Test
@@ -110,7 +107,7 @@ class Ec2CommonTagsTest {
     assertThat(tags).containsEntry("application", "clouddriver");
     assertThat(tags).containsEntry("stack", "prod");
     assertThat(tags).containsEntry("detail", "canary");
-    assertThat(tags).doesNotContainKey("server.group");
+    assertThat(tags).containsEntry("server.group", "clouddriver-prod-canary-v007");
   }
 
   private static String expectedHostname() {
