@@ -2,7 +2,9 @@ package io.moderne.spinnaker.kork.atlas;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.netflix.spectator.atlas.AtlasConfig;
 import io.micrometer.atlas.AtlasMeterRegistry;
+import io.micrometer.core.instrument.Clock;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.config.MeterFilter;
@@ -107,5 +109,57 @@ class AtlasMetricsAutoConfigurationTest {
     assertThat(registry.find("meter.one").counter()).isNotNull();
     assertThat(registry.find("meter.two").counter()).isNotNull();
     assertThat(registry.find("meter.three").counter()).isNull();
+  }
+
+  @Test
+  void maximumMetricsFilter_withNonPositiveLimit_disablesTheCapInsteadOfDenyingEverything() {
+    // A misconfigured cap of 0 (or negative) must NOT silently drop all telemetry; it disables
+    // the backstop and accepts meters as normal.
+    MeterFilter guard = AtlasMetricsAutoConfiguration.maximumMetricsFilter(0);
+    SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    registry.config().meterFilter(guard);
+
+    registry.counter("a");
+    registry.counter("b");
+    registry.counter("c");
+
+    assertThat(registry.find("a").counter()).isNotNull();
+    assertThat(registry.find("c").counter()).isNotNull();
+  }
+
+  @Test
+  void parseMaxMetrics_fallsBackToDefaultOnBlankOrNonNumericValue() {
+    assertThat(AtlasMetricsAutoConfiguration.parseMaxMetrics("100")).isEqualTo(100);
+    assertThat(AtlasMetricsAutoConfiguration.parseMaxMetrics("  250 ")).isEqualTo(250);
+    assertThat(AtlasMetricsAutoConfiguration.parseMaxMetrics("")).isEqualTo(50_000);
+    assertThat(AtlasMetricsAutoConfiguration.parseMaxMetrics("   ")).isEqualTo(50_000);
+    assertThat(AtlasMetricsAutoConfiguration.parseMaxMetrics("not-a-number")).isEqualTo(50_000);
+  }
+
+  @Test
+  void maxMetricsGuard_actuallyCapsMetersWhenAppliedToAnAtlasMeterRegistry() {
+    AtlasConfig nonPublishing =
+        new AtlasConfig() {
+          @Override
+          public String get(String key) {
+            return null;
+          }
+
+          @Override
+          public boolean autoStart() {
+            return false;
+          }
+        };
+    AtlasMeterRegistry registry = new AtlasMeterRegistry(nonPublishing, Clock.SYSTEM);
+    new AtlasMetricsAutoConfiguration().atlasMaxMetricsGuard("2").customize(registry);
+
+    registry.counter("a");
+    registry.counter("b");
+    registry.counter("c"); // beyond the cap
+
+    assertThat(registry.find("a").counter()).isNotNull();
+    assertThat(registry.find("b").counter()).isNotNull();
+    assertThat(registry.find("c").counter()).isNull();
+    registry.close();
   }
 }
