@@ -87,11 +87,6 @@ class AzureInstance implements Instance, Serializable {
       }
     }
 
-    // Orca's health gating reads the health provider list, not healthState: filterHealths
-    // keeps only entries whose type is in interestingHealthProviderNames, and
-    // areSomeUpConsideringPlatformHealth then looks for healthClass 'platform'. Without an
-    // entry here, waitForUpInstances can never be satisfied and reboots hang until timeout.
-    // 'Azure' must match AzureServerGroupCreator.getHealthProviderName() in orca.
     instance.health = [[
       type: 'Azure',
       healthClass: 'platform',

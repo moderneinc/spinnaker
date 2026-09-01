@@ -160,12 +160,6 @@ class AzureServerGroupDescription extends AzureResourceOpsDescription implements
 
   @Override
   Capacity getCapacity() {
-    // sku.capacity is the scale set's configured capacity; instances.size() only reflects
-    // what has been observed, so prefer the former. Zero must be representable: the previous
-    // `instances ? instances.size() : 1` reported a desired of 1 for an emptied server group,
-    // because an empty list is falsy in Groovy, which surfaced as a wrong current size in the
-    // resize modal. A scale set has one capacity scalar and no autoscale range of its own, so
-    // min and max both equal it.
     int size = sku?.capacity != null ? sku.capacity as int : (instances?.size() ?: 0)
     new Capacity(min: size, max: size, desired: size)
   }

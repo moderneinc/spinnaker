@@ -71,8 +71,6 @@ class AzureInstanceSpec extends Specification {
       []    || 'N/A'
   }
 
-  // Orca filters this list by type and then looks for healthClass 'platform'; without the entry
-  // waitForUpInstances can never be satisfied and reboots hang until the task times out.
   void "build emits a platform health provider entry matching the healthState"() {
     given:
       def vm = Mock(VirtualMachineScaleSetVM)

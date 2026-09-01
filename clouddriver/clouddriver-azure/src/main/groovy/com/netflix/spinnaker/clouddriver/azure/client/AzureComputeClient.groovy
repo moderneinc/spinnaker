@@ -382,9 +382,8 @@ public class AzureComputeClient extends AzureBaseClient {
   }
 
   /**
-   * An empty scale set is not healthy. `[].every {}` is vacuously true in Groovy, so treating
-   * the bare every() as the health gate returned immediately whenever no instances had appeared
-   * yet — precisely the state during a scale-up from zero or early in a create.
+   * An empty scale set is not healthy; without the emptiness check this passes instantly during
+   * a scale-up from zero, when no instances have appeared yet.
    */
   static boolean allInstancesHealthy(Collection<AzureInstance> instances) {
     instances && instances.every { AzureInstance it -> it.healthState == HealthState.Up }

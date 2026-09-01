@@ -20,10 +20,7 @@ import spock.lang.Specification
 
 class AzureServerGroupCreatorSpec extends Specification {
 
-  // DetermineHealthProvidersTask builds healthProviderNamesByPlatform from this method. Returning
-  // empty left interestingHealthProviderNames unset, so instance tasks fell back to ["Discovery"],
-  // which Azure never reports, and their health waits never completed. The value must match the
-  // type emitted by clouddriver's AzureInstance health provider entry.
+  // Must match the type emitted by clouddriver's AzureInstance health provider entry.
   void "declares Azure as its platform health provider"() {
     expect:
       new AzureServerGroupCreator().healthProviderName == Optional.of("Azure")

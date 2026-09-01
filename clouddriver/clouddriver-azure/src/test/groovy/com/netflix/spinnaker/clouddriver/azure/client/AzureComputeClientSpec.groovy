@@ -41,8 +41,6 @@ class AzureComputeClientSpec extends Specification {
     e.message.contains("myapp-dev-v086_9")
   }
 
-  // The bare every() was vacuously true on an empty list, so the health gate passed instantly
-  // during a scale-up from zero — the case it most needs to catch.
   void "allInstancesHealthy rejects an empty scale set"() {
     expect:
       !AzureComputeClient.allInstancesHealthy([])

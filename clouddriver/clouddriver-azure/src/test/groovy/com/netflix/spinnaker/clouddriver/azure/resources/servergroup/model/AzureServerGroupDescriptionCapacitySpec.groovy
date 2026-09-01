@@ -26,8 +26,6 @@ class AzureServerGroupDescriptionCapacitySpec extends Specification {
     i
   }
 
-  // An emptied server group previously reported a desired of 1, because an empty list is falsy
-  // in Groovy, which surfaced as a wrong current size in the resize modal.
   void "an emptied server group reports zero rather than one"() {
     given:
       def description = new AzureServerGroupDescription()
@@ -48,8 +46,6 @@ class AzureServerGroupDescriptionCapacitySpec extends Specification {
       description.capacity.desired == 2
   }
 
-  // sku.capacity is what the scale set is configured for; instances only reflect what has been
-  // observed, so a scale-up in progress should report the target rather than the partial count.
   void "capacity prefers the scale set's configured sku capacity"() {
     given:
       def description = new AzureServerGroupDescription()
