@@ -142,16 +142,6 @@ class CreateAzureServerGroupWithoutLoadBalancersAtomicOperation implements Atomi
           "serverGroup",
           templateParameters)
 
-        def healthy = description.credentials.computeClient.waitForScaleSetHealthy(resourceGroupName, description.name)
-
-        if (healthy) {
-          getTask().updateStatus(BASE_PHASE, String.format(
-            "Azure server group %s healthy.",
-            description.getName()))
-        } else {
-          errList.add("Server group did not come up in time")
-        }
-
         errList.addAll(AzureDeploymentOperation.checkDeploymentOperationStatus(task, BASE_PHASE, description.credentials, resourceGroupName, deployment.name()))
       }
     } catch (Exception e) {

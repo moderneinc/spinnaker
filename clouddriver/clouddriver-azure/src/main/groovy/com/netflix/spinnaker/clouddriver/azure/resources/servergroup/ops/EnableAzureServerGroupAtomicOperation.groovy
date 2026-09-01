@@ -74,7 +74,7 @@ class EnableAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
               .networkClient
               .enableServerGroupWithLoadBalancer(resourceGroupName, serverGroupDescription.loadBalancerName, serverGroupDescription.name, serverGroupDescription.backendPoolName)
 
-            waitForHealthy(resourceGroupName, serverGroupDescription, region, errList)
+            task.updateStatus BASE_PHASE, "Done enabling Azure server group ${serverGroupDescription.name} in ${region}."
           } else if (serverGroupDescription.loadBalancerType == AzureLoadBalancer.AzureLoadBalancerType.AZURE_APPLICATION_GATEWAY.toString()) {
             String loadBalancerRG = serverGroupDescription.loadBalancerResourceGroup ?: resourceGroupName
             description
@@ -82,7 +82,7 @@ class EnableAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
               .networkClient
               .enableServerGroupWithAppGateway(resourceGroupName, loadBalancerRG, serverGroupDescription.appGatewayName, serverGroupDescription.name, serverGroupDescription.backendPoolName)
 
-            waitForHealthy(resourceGroupName, serverGroupDescription, region, errList)
+            task.updateStatus BASE_PHASE, "Done enabling Azure server group ${serverGroupDescription.name} in ${region}."
           } else {
             throw new RuntimeException("Azure server group with load balancer type $serverGroupDescription.loadBalancerType cannot be enabled.")
           }
@@ -107,13 +107,4 @@ class EnableAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
     null
   }
 
-  private void waitForHealthy(String resourceGroupName, AzureServerGroupDescription serverGroupDescription, String region, ArrayList<String> errList) {
-    def healthy = description.credentials.computeClient.waitForScaleSetHealthy(resourceGroupName, serverGroupDescription.name)
-
-    if (healthy) {
-      task.updateStatus BASE_PHASE, "Done enabling Azure server group ${serverGroupDescription.name} in ${region}."
-    } else {
-      errList.add("Server group ${serverGroupDescription.name} in ${region} did not come up in time.")
-    }
-  }
 }
