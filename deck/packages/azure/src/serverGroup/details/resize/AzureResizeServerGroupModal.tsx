@@ -59,9 +59,6 @@ export class AzureResizeServerGroupModal extends React.Component<
         max: targetSize,
         desired: targetSize,
       },
-      // Bypass health checks for Azure resize operations
-      // Azure handles health checking internally via waitForScaleSetHealthy
-      interestingHealthProviderNames: [] as string[],
     };
 
     this.setState({ submitting: false });

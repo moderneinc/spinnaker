@@ -1,6 +1,7 @@
 package com.netflix.spinnaker.clouddriver.azure.client
 
 import com.netflix.spinnaker.clouddriver.azure.resources.servergroup.model.AzureInstance
+import com.netflix.spinnaker.clouddriver.model.HealthState
 import spock.lang.Specification
 
 class AzureComputeClientSpec extends Specification {
@@ -38,6 +39,26 @@ class AzureComputeClientSpec extends Specification {
     then:
     def e = thrown(IllegalArgumentException)
     e.message.contains("myapp-dev-v086_9")
+  }
+
+  // The bare every() was vacuously true on an empty list, so the health gate passed instantly
+  // during a scale-up from zero — the case it most needs to catch.
+  void "allInstancesHealthy rejects an empty scale set"() {
+    expect:
+      !AzureComputeClient.allInstancesHealthy([])
+      !AzureComputeClient.allInstancesHealthy(null)
+  }
+
+  void "allInstancesHealthy requires every instance to be Up"() {
+    given:
+      def up = instance("myapp-dev-v086_0", "0")
+      up.healthState = HealthState.Up
+      def down = instance("myapp-dev-v086_1", "1")
+      down.healthState = HealthState.Down
+
+    expect:
+      AzureComputeClient.allInstancesHealthy([up])
+      !AzureComputeClient.allInstancesHealthy([up, down])
   }
 
   void "resolveInstanceIds fails loudly when the server group has no instances"() {

@@ -382,6 +382,15 @@ public class AzureComputeClient extends AzureBaseClient {
   }
 
   /**
+   * An empty scale set is not healthy. `[].every {}` is vacuously true in Groovy, so treating
+   * the bare every() as the health gate returned immediately whenever no instances had appeared
+   * yet — precisely the state during a scale-up from zero or early in a create.
+   */
+  static boolean allInstancesHealthy(Collection<AzureInstance> instances) {
+    instances && instances.every { AzureInstance it -> it.healthState == HealthState.Up }
+  }
+
+  /**
    * check the scale set's health status using the default timeout
    */
   Boolean waitForScaleSetHealthy(String resourceGroupName, String serverGroupName) {
@@ -396,8 +405,7 @@ public class AzureComputeClient extends AzureBaseClient {
     def timeoutNanos = timeoutMillis * 1_000_000
 
     while (System.nanoTime() - startNanos < timeoutNanos) {
-      def instances = getServerGroupInstances(resourceGroupName, serverGroupName)
-      if (instances.every { it.healthState == HealthState.Up }) {
+      if (allInstancesHealthy(getServerGroupInstances(resourceGroupName, serverGroupName))) {
         return true
       }
 

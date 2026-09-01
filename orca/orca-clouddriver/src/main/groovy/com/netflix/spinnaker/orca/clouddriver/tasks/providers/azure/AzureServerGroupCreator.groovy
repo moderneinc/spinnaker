@@ -80,6 +80,10 @@ class AzureServerGroupCreator implements ServerGroupCreator, DeploymentDetailsAw
 
   @Override
   Optional<String> getHealthProviderName() {
-    return Optional.empty()
+    // Feeds DetermineHealthProvidersTask's healthProviderNamesByPlatform. Returning empty
+    // leaves interestingHealthProviderNames unset, so instance tasks fall back to
+    // ["Discovery"] — which Azure never reports — and their health waits never complete.
+    // Must match the type emitted by AzureInstance's health provider entry.
+    return Optional.of("Azure")
   }
 }
