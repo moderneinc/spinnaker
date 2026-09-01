@@ -98,6 +98,13 @@ describe('Controller: azureInstanceDetailsCtrl', function () {
       expect(scope.instance.serverGroup).toBe('myapp-dev-v086');
     });
 
+    // the header and every confirmation dialog read instanceId, which AzureInstance lacks
+    it('populates instanceId so the header and dialogs do not render undefined', function () {
+      buildController.call(this);
+
+      expect(scope.instance.instanceId).toBe('myapp-dev-v086_3');
+    });
+
     it('offers reboot, terminate, and terminate and shrink', function () {
       buildController.call(this);
 
