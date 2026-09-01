@@ -127,9 +127,11 @@ module(AZURE_INSTANCE_DETAILS_INSTANCE_DETAILS_CONTROLLER, [UIROUTER_ANGULARJS, 
               $scope.instance.region = region;
               $scope.instance.vpcId = vpcId;
               $scope.instance.loadBalancers = loadBalancers;
-              // AzureInstance carries a name but no id; the terminate and reboot jobs address
-              // instances by id, and the writer needs serverGroup to send serverGroupName.
+              // AzureInstance carries a name but neither id nor instanceId: the jobs address
+              // instances by id, the header and every confirmation dialog read instanceId, and
+              // the writer needs serverGroup to send serverGroupName.
               $scope.instance.id = $scope.instance.id || instance.instanceId;
+              $scope.instance.instanceId = $scope.instance.instanceId || instance.instanceId;
               $scope.instance.serverGroup = $scope.instance.serverGroup || extraData.serverGroup;
               const discoveryMetric = _.find($scope.healthMetrics, function (metric) {
                 return metric.type === 'Discovery';
