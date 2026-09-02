@@ -87,6 +87,12 @@ class AzureInstance implements Instance, Serializable {
       }
     }
 
+    instance.health = [[
+      type: 'Azure',
+      healthClass: 'platform',
+      state: (instance.healthState ?: HealthState.Unknown).toString()
+    ] as Map<String, Object>]
+
     instance
   }
 

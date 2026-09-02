@@ -44,8 +44,6 @@ import java.util.stream.Collectors
 @CompileStatic
 public class AzureComputeClient extends AzureBaseClient {
 
-  public static final long DEFAULT_SERVER_WAIT_TIMEOUT_MILLIS = 2 * 60 * 60 * 1000
-
   final List<String> allowedPublishers
 
   AzureComputeClient(String subscriptionId, TokenCredential credentials, AzureProfile azureProfile, List<String> allowedPublishers = []) {
@@ -379,32 +377,6 @@ public class AzureComputeClient extends AzureBaseClient {
       vmsToReimage << vm
     }
     vmsToReimage.each { VirtualMachineScaleSetVM vm -> executeOp({ vm.reimage() }) }
-  }
-
-  /**
-   * check the scale set's health status using the default timeout
-   */
-  Boolean waitForScaleSetHealthy(String resourceGroupName, String serverGroupName) {
-    return waitForScaleSetHealthy(resourceGroupName, serverGroupName, DEFAULT_SERVER_WAIT_TIMEOUT_MILLIS)
-  }
-
-  /**
-   * check the scale set's health status, wait for the timeout return true when healthy, false if we hit the timeout
-   */
-  Boolean waitForScaleSetHealthy(String resourceGroupName, String serverGroupName, long timeoutMillis) {
-    def startNanos = System.nanoTime()
-    def timeoutNanos = timeoutMillis * 1_000_000
-
-    while (System.nanoTime() - startNanos < timeoutNanos) {
-      def instances = getServerGroupInstances(resourceGroupName, serverGroupName)
-      if (instances.every { it.healthState == HealthState.Up }) {
-        return true
-      }
-
-      Thread.sleep(30 * 1000)
-    }
-
-    false
   }
 
   Map<String, List<VirtualMachineSize>> getVirtualMachineSizesByRegions(List<AzureNamedAccountCredentials.AzureRegion> regions) {

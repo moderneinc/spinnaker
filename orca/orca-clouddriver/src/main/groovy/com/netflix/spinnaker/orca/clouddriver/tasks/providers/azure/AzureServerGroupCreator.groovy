@@ -80,6 +80,6 @@ class AzureServerGroupCreator implements ServerGroupCreator, DeploymentDetailsAw
 
   @Override
   Optional<String> getHealthProviderName() {
-    return Optional.empty()
+    return Optional.of("Azure")
   }
 }

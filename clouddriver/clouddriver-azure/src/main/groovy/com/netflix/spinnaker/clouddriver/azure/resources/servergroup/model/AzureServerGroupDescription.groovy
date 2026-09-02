@@ -160,11 +160,8 @@ class AzureServerGroupDescription extends AzureResourceOpsDescription implements
 
   @Override
   Capacity getCapacity() {
-    new Capacity(
-      min: 1,
-      max: instances ? instances.size() : 1,
-      desired: instances ? instances.size() : 1
-    )
+    int size = sku?.capacity != null ? sku.capacity as int : (instances?.size() ?: 0)
+    new Capacity(min: size, max: size, desired: size)
   }
 
   static AzureServerGroupDescription build(VirtualMachineScaleSetInner scaleSet) {

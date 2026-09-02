@@ -268,15 +268,6 @@ class CreateAzureServerGroupAtomicOperation implements AtomicOperation<Map> {
         }
       }
 
-      def healthy = description.credentials.computeClient.waitForScaleSetHealthy(resourceGroupName, description.name)
-
-      if (healthy) {
-        task.updateStatus BASE_PHASE, "Azure server group ${description.name} healthy."
-      } else {
-        errList.add("Server group did not come up in time")
-        throw new AtomicOperationException("${description.name} deployment failed", errList)
-      }
-
       task.updateStatus(BASE_PHASE, "Deployment for server group ${description.name} in ${description.region} has succeeded.")
     } else {
       throw new AtomicOperationException("${description.name} deployment failed", errList)

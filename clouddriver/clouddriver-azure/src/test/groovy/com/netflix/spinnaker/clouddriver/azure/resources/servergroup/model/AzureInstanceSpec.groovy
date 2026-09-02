@@ -71,6 +71,24 @@ class AzureInstanceSpec extends Specification {
       []    || 'N/A'
   }
 
+  void "build emits a platform health provider entry matching the healthState"() {
+    given:
+      def vm = Mock(VirtualMachineScaleSetVM)
+      def sku = new Sku()
+      vm.innerModel() >> innerWithZones(null)
+      vm.sku() >> sku
+      sku.name() >> "test"
+
+    when:
+      def health = AzureInstance.build(vm).health
+
+    then:
+      health.size() == 1
+      health[0].type == 'Azure'
+      health[0].healthClass == 'platform'
+      health[0].state == 'Unknown'
+  }
+
   private static VirtualMachineScaleSetVMInner innerWithZones(List<String> zones) {
     def inner = new VirtualMachineScaleSetVMInner()
     def field = VirtualMachineScaleSetVMInner.getDeclaredField('zones')
