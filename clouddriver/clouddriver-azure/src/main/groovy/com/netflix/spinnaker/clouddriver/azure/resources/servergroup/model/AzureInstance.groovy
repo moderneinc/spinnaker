@@ -28,14 +28,20 @@ import groovy.transform.CompileStatic
 class AzureInstance implements Instance, Serializable {
   public static final String APP_HEALTH_EXT_LINUX = "Microsoft.ManagedServices.ApplicationHealthLinux"
   public static final String APP_HEALTH_EXT_WINDOWS = "Microsoft.ManagedServices.ApplicationHealthWindows"
+  public static final String APP_HEALTH_PROVIDER = "AzureAppHealth"
+  private static final List<String> TERMINAL_PROVISIONING_STATES = [
+    AzureUtilities.ProvisioningState.FAILED,
+    AzureUtilities.ProvisioningState.CANCELED,
+    AzureUtilities.ProvisioningState.DELETED,
+    "Deleting"
+  ]
   String name
   String resourceId
   String vhd
-  HealthState healthState
   Long launchTime
   String zone = 'N/A'
   String instanceType
-  List<Map<String, Object>> health
+  List<Map<String, Object>> health = []
   final String providerType = AzureCloudProvider.ID
   final String cloudProvider = AzureCloudProvider.ID
 
@@ -51,6 +57,9 @@ class AzureInstance implements Instance, Serializable {
     // zone support (or VMs not pinned to a zone) report no zones, so keep 'N/A'.
     instance.zone = vm.innerModel()?.zones()?.getAt(0) ?: 'N/A'
 
+    HealthState powerState = null
+    HealthState provisioningState = null
+
     vm.instanceView()?.statuses()?.each { status ->
       def codes = status.code()?.split('/')
       if (!codes || codes.length < 2) return
@@ -59,41 +68,94 @@ class AzureInstance implements Instance, Serializable {
           if (codes[1].equalsIgnoreCase(AzureUtilities.ProvisioningState.SUCCEEDED)) {
             instance.launchTime = status.time()?.toInstant()?.toEpochMilli()
           } else {
-            instance.healthState = HealthState.Failed
+            provisioningState = provisioningHealthState(codes[1])
           }
           break
         case "PowerState":
-          instance.healthState =
-            codes[1].equalsIgnoreCase("Running") ? HealthState.Up : HealthState.Down
+          powerState = powerHealthState(codes[1])
           break
         default:
           break
       }
     }
 
-    // if health extension exists, read its status and update health state
-    vm?.instanceView()?.extensions()?.each { extension ->
-      if (extension.type() == APP_HEALTH_EXT_LINUX ||
-        extension.type() == APP_HEALTH_EXT_WINDOWS) {
-        def substatuses = extension.substatuses()
-        if (substatuses) {
-          def statusLevel = substatuses[0]?.level()
-          if (statusLevel == StatusLevelTypes.ERROR) {
-            instance.healthState = HealthState.Down
-          } else {
-            instance.healthState = HealthState.Up
-          }
-        }
-      }
-    }
+    HealthState applicationHealth = readApplicationHealth(vm)
 
-    instance.health = [[
-      type: 'Azure',
-      healthClass: 'platform',
-      state: (instance.healthState ?: HealthState.Unknown).toString()
-    ] as Map<String, Object>]
+    instance.health = [platformHealth(powerState, provisioningState)]
+    if (applicationHealth) {
+      instance.health << ([
+        type : APP_HEALTH_PROVIDER,
+        state: applicationHealth.toString()
+      ] as Map<String, Object>)
+    }
 
     instance
   }
 
- }
+  @Override
+  HealthState getHealthState() {
+    someUpRemainingUnknown(health) ? HealthState.Up :
+      anyStarting(health) ? HealthState.Starting :
+        anyDown(health) ? HealthState.Down :
+          anyOutOfService(health) ? HealthState.OutOfService :
+            HealthState.Unknown
+  }
+
+  private static boolean anyDown(List<Map<String, Object>> healthList) {
+    healthList.any { it.get('state') == HealthState.Down.toString() }
+  }
+
+  private static boolean someUpRemainingUnknown(List<Map<String, Object>> healthList) {
+    List<Map<String, Object>> knownHealthList =
+      healthList.findAll { it.get('state') != HealthState.Unknown.toString() }
+    knownHealthList ? knownHealthList.every { it.get('state') == HealthState.Up.toString() } : false
+  }
+
+  private static boolean anyStarting(List<Map<String, Object>> healthList) {
+    healthList.any { it.get('state') == HealthState.Starting.toString() }
+  }
+
+  private static boolean anyOutOfService(List<Map<String, Object>> healthList) {
+    healthList.any { it.get('state') == HealthState.OutOfService.toString() }
+  }
+
+  private static HealthState powerHealthState(String code) {
+    if (code.equalsIgnoreCase("running")) {
+      return HealthState.Unknown
+    }
+    if (code.equalsIgnoreCase("starting")) {
+      return HealthState.Starting
+    }
+    return HealthState.Down
+  }
+
+  private static HealthState provisioningHealthState(String code) {
+    TERMINAL_PROVISIONING_STATES.any { it.equalsIgnoreCase(code) } ? HealthState.Down : HealthState.Starting
+  }
+
+  private static Map<String, Object> platformHealth(HealthState powerState, HealthState provisioningState) {
+    HealthState state = provisioningState == HealthState.Down
+      ? HealthState.Down
+      : (powerState ?: provisioningState ?: HealthState.Unknown)
+
+    return [
+      type       : 'Azure',
+      healthClass: 'platform',
+      state      : state.toString()
+    ] as Map<String, Object>
+  }
+
+  private static HealthState readApplicationHealth(VirtualMachineScaleSetVM vm) {
+    HealthState applicationHealth = null
+    vm?.instanceView()?.extensions()?.each { extension ->
+      if (extension.type() == APP_HEALTH_EXT_LINUX || extension.type() == APP_HEALTH_EXT_WINDOWS) {
+        def substatuses = extension.substatuses()
+        if (substatuses) {
+          applicationHealth =
+            substatuses[0]?.level() == StatusLevelTypes.ERROR ? HealthState.Down : HealthState.Up
+        }
+      }
+    }
+    applicationHealth
+  }
+}
