@@ -23,7 +23,6 @@ import com.netflix.spinnaker.orca.api.pipeline.TaskResult
 import com.netflix.spinnaker.orca.clouddriver.KatoService
 import com.netflix.spinnaker.orca.clouddriver.utils.CloudProviderAware
 
-import com.netflix.spinnaker.orca.clouddriver.utils.HealthHelper
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
 
@@ -47,8 +46,7 @@ class RebootInstancesTask implements CloudProviderAware, Task {
     TaskResult.builder(ExecutionStatus.SUCCEEDED).context([
       "notification.type"           : "rebootinstances",
       "reboot.account.name"         : account,
-      "kato.last.task.id"           : taskId,
-      interestingHealthProviderNames: HealthHelper.getInterestingHealthProviderNames(stage, ["Discovery"])
+      "kato.last.task.id"           : taskId
     ]).build()
   }
 }
