@@ -17,6 +17,7 @@
 package com.netflix.spinnaker.clouddriver.azure.resources.servergroups.deploy.templates.description
 
 import com.azure.resourcemanager.compute.fluent.models.VirtualMachineScaleSetInner
+import com.azure.resourcemanager.compute.models.AutomaticRepairsPolicy
 import com.azure.resourcemanager.compute.models.ImageReference
 import com.azure.resourcemanager.compute.models.Sku
 import com.azure.resourcemanager.compute.models.UpgradeMode
@@ -137,6 +138,24 @@ class AzureServerGroupDescriptionUnitSpec extends Specification {
 
     then:
     description.disabled == false
+  }
+
+  def 'should reflect whether the scale set has automatic repairs enabled'() {
+    given:
+    def scaleSet = createScaleSet().withAutomaticRepairsPolicy(policy)
+
+    when:
+    def description = AzureServerGroupDescription.build(scaleSet)
+
+    then:
+    description.automaticRepairsEnabled == expected
+
+    where:
+    policy                                            || expected
+    null                                              || false
+    new AutomaticRepairsPolicy()                      || false
+    new AutomaticRepairsPolicy().withEnabled(false)   || false
+    new AutomaticRepairsPolicy().withEnabled(true)    || true
   }
 
   def 'should tolerate a null upgradePolicy'() {
