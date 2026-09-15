@@ -86,6 +86,11 @@ class EnableAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
           } else {
             throw new RuntimeException("Azure server group with load balancer type $serverGroupDescription.loadBalancerType cannot be enabled.")
           }
+
+          if (serverGroupDescription.automaticRepairsEnabled) {
+            description.credentials.computeClient.resumeAutomaticRepairs(resourceGroupName, serverGroupDescription.name)
+            task.updateStatus BASE_PHASE, "Resumed automatic repairs for Azure server group ${serverGroupDescription.name} in ${region}."
+          }
         } catch (Exception e) {
           task.updateStatus(BASE_PHASE, "Enabling of server group ${description.name} failed: ${e.message}")
           errList.add("Failed to enable server group ${description.name}: ${e.message}")

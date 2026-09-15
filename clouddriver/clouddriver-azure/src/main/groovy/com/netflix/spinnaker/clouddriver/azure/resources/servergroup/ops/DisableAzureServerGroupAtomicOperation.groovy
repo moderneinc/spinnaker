@@ -76,6 +76,11 @@ class DisableAzureServerGroupAtomicOperation implements AtomicOperation<Void> {
             throw new IllegalArgumentException("Load balancer type $serverGroupDescription.loadBalancerType was not valid.")
           }
 
+          if (serverGroupDescription.automaticRepairsEnabled) {
+            description.credentials.computeClient.suspendAutomaticRepairs(resourceGroupName, serverGroupDescription.name)
+            task.updateStatus BASE_PHASE, "Suspended automatic repairs for Azure server group ${serverGroupDescription.name} in ${region}."
+          }
+
         } catch (Exception e) {
           task.updateStatus(BASE_PHASE, "Disabling of server group ${description.name} failed: ${e.message}")
           errList.add("Failed to disable server group ${description.name}: ${e.message}")
