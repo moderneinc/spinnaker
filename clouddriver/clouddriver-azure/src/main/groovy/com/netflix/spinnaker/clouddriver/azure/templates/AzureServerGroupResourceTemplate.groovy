@@ -408,6 +408,8 @@ class AzureServerGroupResourceTemplate {
     Map<String, String> upgradePolicy = [:]
     ScaleSetVMProfile virtualMachineProfile
     Boolean doNotRunExtensionsOnOverprovisionedVMs
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    AutomaticRepairsPolicy automaticRepairsPolicy
 
     VirtualMachineScaleSetProperty(AzureServerGroupDescription description) {
       upgradePolicy["mode"] = description.upgradePolicy.toString()
@@ -420,6 +422,23 @@ class AzureServerGroupResourceTemplate {
       }
       else {
         virtualMachineProfile = new ScaleSetVMProfileProperty(description)
+      }
+
+      // ARM rejects automatic repairs on a scale set with no health extension or load balancer probe
+      if (description.healthSettings?.protocol) {
+        automaticRepairsPolicy = new AutomaticRepairsPolicy(description)
+      }
+    }
+  }
+
+  static class AutomaticRepairsPolicy {
+    Boolean enabled = true
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    String gracePeriod
+
+    AutomaticRepairsPolicy(AzureServerGroupDescription description) {
+      if (description.healthCheckGracePeriod != null) {
+        gracePeriod = "PT${description.healthCheckGracePeriod}S"
       }
     }
   }

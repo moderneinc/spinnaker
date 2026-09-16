@@ -72,6 +72,8 @@ class AzureServerGroupDescription extends AzureResourceOpsDescription implements
   Boolean createNewSubnet = false
   AzureExtensionCustomScriptSettings customScriptsSettings
   AzureExtensionHealthSettings healthSettings
+  Integer healthCheckGracePeriod
+  Boolean automaticRepairsEnabled = false
   Boolean enableInboundNAT = false
   List<VirtualMachineScaleSetDataDisk> dataDisks
   Integer terminationNotBeforeTimeoutInMinutes
@@ -216,6 +218,7 @@ class AzureServerGroupDescription extends AzureResourceOpsDescription implements
       if (storageNames) azureSG.storageAccountNames.addAll(storageNames.split(","))
     }
     azureSG.doNotRunExtensionsOnOverprovisionedVMs = scaleSet.doNotRunExtensionsOnOverprovisionedVMs()
+    azureSG.automaticRepairsEnabled = scaleSet.automaticRepairsPolicy()?.enabled() ?: false
 
     //Fetch system and user assigned identity details
     if(scaleSet.identity()!=null) {

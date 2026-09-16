@@ -20,6 +20,9 @@ import com.azure.core.credential.TokenCredential
 import com.azure.core.http.rest.Response
 import com.azure.core.management.exception.ManagementException
 import com.azure.core.management.profile.AzureProfile
+import com.azure.resourcemanager.compute.models.OrchestrationServiceNames
+import com.azure.resourcemanager.compute.models.OrchestrationServiceStateAction
+import com.azure.resourcemanager.compute.models.OrchestrationServiceStateInput
 import com.azure.resourcemanager.compute.models.VirtualMachineCustomImage
 import com.azure.resourcemanager.compute.models.VirtualMachineImage
 import com.azure.resourcemanager.compute.models.VirtualMachineOffer
@@ -405,6 +408,25 @@ public class AzureComputeClient extends AzureBaseClient {
       }
     }
     null
+  }
+
+  void suspendAutomaticRepairs(String resourceGroupName, String serverGroupName) {
+    setAutomaticRepairsState(resourceGroupName, serverGroupName, OrchestrationServiceStateAction.SUSPEND)
+  }
+
+  void resumeAutomaticRepairs(String resourceGroupName, String serverGroupName) {
+    setAutomaticRepairsState(resourceGroupName, serverGroupName, OrchestrationServiceStateAction.RESUME)
+  }
+
+  private void setAutomaticRepairsState(String resourceGroupName, String serverGroupName, OrchestrationServiceStateAction action) {
+    executeOp({
+      azure.virtualMachineScaleSets().manager().serviceClient().getVirtualMachineScaleSets().setOrchestrationServiceState(
+        resourceGroupName,
+        serverGroupName,
+        new OrchestrationServiceStateInput()
+          .withServiceName(OrchestrationServiceNames.AUTOMATIC_REPAIRS)
+          .withAction(action))
+    })
   }
 
   @Canonical
