@@ -23,12 +23,6 @@ import static com.netflix.spinnaker.clouddriver.ecs.cache.Keys.Namespace.ECS_CLU
 import static com.netflix.spinnaker.clouddriver.ecs.cache.Keys.Namespace.SERVICES;
 import static com.netflix.spinnaker.clouddriver.ecs.cache.Keys.Namespace.TASKS;
 
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.services.ecs.AmazonECS;
-import com.amazonaws.services.ecs.model.DescribeTasksRequest;
-import com.amazonaws.services.ecs.model.ListTasksRequest;
-import com.amazonaws.services.ecs.model.ListTasksResult;
-import com.amazonaws.services.ecs.model.Task;
 import com.netflix.spectator.api.Registry;
 import com.netflix.spinnaker.cats.agent.AgentDataType;
 import com.netflix.spinnaker.cats.cache.CacheData;
@@ -37,6 +31,7 @@ import com.netflix.spinnaker.cats.provider.ProviderCache;
 import com.netflix.spinnaker.clouddriver.aws.security.AmazonClientProvider;
 import com.netflix.spinnaker.clouddriver.aws.security.NetflixAmazonCredentials;
 import com.netflix.spinnaker.clouddriver.ecs.cache.Keys;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -49,6 +44,12 @@ import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.services.ecs.EcsClient;
+import software.amazon.awssdk.services.ecs.model.DescribeTasksRequest;
+import software.amazon.awssdk.services.ecs.model.DescribeTasksResponse;
+import software.amazon.awssdk.services.ecs.model.ListTasksRequest;
+import software.amazon.awssdk.services.ecs.model.ListTasksResponse;
+import software.amazon.awssdk.services.ecs.model.Task;
 
 public class TaskCachingAgent extends AbstractEcsOnDemandAgent<Task> {
   private static final Collection<AgentDataType> types =
@@ -62,9 +63,8 @@ public class TaskCachingAgent extends AbstractEcsOnDemandAgent<Task> {
       NetflixAmazonCredentials account,
       String region,
       AmazonClientProvider amazonClientProvider,
-      AWSCredentialsProvider awsCredentialsProvider,
       Registry registry) {
-    super(account, region, amazonClientProvider, awsCredentialsProvider, registry);
+    super(account, region, amazonClientProvider, registry);
   }
 
   @Override
@@ -78,27 +78,27 @@ public class TaskCachingAgent extends AbstractEcsOnDemandAgent<Task> {
   }
 
   @Override
-  protected List<Task> getItems(AmazonECS ecs, ProviderCache providerCache) {
+  protected List<Task> getItems(EcsClient ecs, ProviderCache providerCache) {
     List<Task> taskList = new LinkedList<>();
     Set<String> clusters = getClusters(ecs, providerCache);
 
     for (String cluster : clusters) {
       String nextToken = null;
       do {
-        ListTasksRequest listTasksRequest = new ListTasksRequest().withCluster(cluster);
+        ListTasksRequest.Builder requestBuilder = ListTasksRequest.builder().cluster(cluster);
         if (nextToken != null) {
-          listTasksRequest.setNextToken(nextToken);
+          requestBuilder.nextToken(nextToken);
         }
-        ListTasksResult listTasksResult = ecs.listTasks(listTasksRequest);
-        List<String> taskArns = listTasksResult.getTaskArns();
+        ListTasksResponse listTasksResult = ecs.listTasks(requestBuilder.build());
+        List<String> taskArns = listTasksResult.taskArns();
         if (taskArns.size() == 0) {
           continue;
         }
-        List<Task> tasks =
-            ecs.describeTasks(new DescribeTasksRequest().withCluster(cluster).withTasks(taskArns))
-                .getTasks();
-        taskList.addAll(tasks);
-        nextToken = listTasksResult.getNextToken();
+        DescribeTasksResponse describeTasksResult =
+            ecs.describeTasks(
+                DescribeTasksRequest.builder().cluster(cluster).tasks(taskArns).build());
+        taskList.addAll(describeTasksResult.tasks());
+        nextToken = listTasksResult.nextToken();
       } while (nextToken != null && nextToken.length() != 0);
     }
     return taskList;
@@ -106,39 +106,43 @@ public class TaskCachingAgent extends AbstractEcsOnDemandAgent<Task> {
 
   @Override
   public Collection<Map<String, Object>> pendingOnDemandRequests(ProviderCache providerCache) {
-    Collection<CacheData> allOnDemand = providerCache.getAll(ON_DEMAND.toString());
+
     List<Map<String, Object>> returnResults = new LinkedList<>();
-    for (CacheData onDemand : allOnDemand) {
+
+    Collection<String> serviceIds =
+        providerCache.filterIdentifiers(
+            ON_DEMAND.getNs(), Keys.buildGlob(SERVICES.toString(), accountName, region, null));
+    Collection<String> taskIds =
+        providerCache.filterIdentifiers(
+            ON_DEMAND.getNs(), Keys.buildGlob(TASKS.toString(), accountName, region, null));
+    List<String> combined = new ArrayList<>(serviceIds.size() + taskIds.size());
+    combined.addAll(serviceIds);
+    combined.addAll(taskIds);
+
+    Collection<CacheData> matchingTheCache = providerCache.getAll(ON_DEMAND.toString(), combined);
+    for (CacheData onDemand : matchingTheCache) {
       Map<String, String> parsedKey = Keys.parse(onDemand.getId());
-      if (parsedKey != null
-          && parsedKey.get("type") != null
-          && (parsedKey.get("type").equals(SERVICES.toString())
-              || parsedKey.get("type").equals(TASKS.toString())
-                  && parsedKey.get("account").equals(accountName)
-                  && parsedKey.get("region").equals(region))) {
+      parsedKey.put("type", "serverGroup");
+      parsedKey.put("serverGroup", parsedKey.get("serviceName"));
 
-        parsedKey.put("type", "serverGroup");
-        parsedKey.put("serverGroup", parsedKey.get("serviceName"));
+      HashMap<String, Object> result = new HashMap<>();
+      result.put("id", onDemand.getId());
+      result.put("details", parsedKey);
 
-        HashMap<String, Object> result = new HashMap<>();
-        result.put("id", onDemand.getId());
-        result.put("details", parsedKey);
+      result.put("cacheTime", onDemand.getAttributes().get("cacheTime"));
+      result.put("cacheExpiry", onDemand.getAttributes().get("cacheExpiry"));
+      result.put(
+          "processedCount",
+          (onDemand.getAttributes().get("processedCount") != null
+              ? onDemand.getAttributes().get("processedCount")
+              : 1));
+      result.put(
+          "processedTime",
+          onDemand.getAttributes().get("processedTime") != null
+              ? onDemand.getAttributes().get("processedTime")
+              : new Date());
 
-        result.put("cacheTime", onDemand.getAttributes().get("cacheTime"));
-        result.put("cacheExpiry", onDemand.getAttributes().get("cacheExpiry"));
-        result.put(
-            "processedCount",
-            (onDemand.getAttributes().get("processedCount") != null
-                ? onDemand.getAttributes().get("processedCount")
-                : 1));
-        result.put(
-            "processedTime",
-            onDemand.getAttributes().get("processedTime") != null
-                ? onDemand.getAttributes().get("processedTime")
-                : new Date());
-
-        returnResults.add(result);
-      }
+      returnResults.add(result);
     }
     return returnResults;
   }
@@ -163,16 +167,16 @@ public class TaskCachingAgent extends AbstractEcsOnDemandAgent<Task> {
     Map<String, CacheData> clusterDataPoints = new HashMap<>();
 
     for (Task task : tasks) {
-      String taskId = StringUtils.substringAfterLast(task.getTaskArn(), "/");
+      String taskId = StringUtils.substringAfterLast(task.taskArn(), "/");
       Map<String, Object> attributes = convertTaskToAttributes(task);
 
       String key = Keys.getTaskKey(accountName, region, taskId);
       dataPoints.add(new DefaultCacheData(key, attributes, Collections.emptyMap()));
 
-      String clusterName = StringUtils.substringAfterLast(task.getClusterArn(), "/");
+      String clusterName = StringUtils.substringAfterLast(task.clusterArn(), "/");
       Map<String, Object> clusterAttributes =
           EcsClusterCachingAgent.convertClusterArnToAttributes(
-              accountName, region, task.getClusterArn());
+              accountName, region, task.clusterArn());
       key = Keys.getClusterKey(accountName, region, clusterName);
       clusterDataPoints.put(
           key, new DefaultCacheData(key, clusterAttributes, Collections.emptyMap()));
@@ -189,23 +193,23 @@ public class TaskCachingAgent extends AbstractEcsOnDemandAgent<Task> {
   }
 
   public static Map<String, Object> convertTaskToAttributes(Task task) {
-    String taskId = StringUtils.substringAfterLast(task.getTaskArn(), "/");
+    String taskId = StringUtils.substringAfterLast(task.taskArn(), "/");
 
     Map<String, Object> attributes = new HashMap<>();
     attributes.put("taskId", taskId);
-    attributes.put("taskArn", task.getTaskArn());
-    attributes.put("clusterArn", task.getClusterArn());
-    attributes.put("containerInstanceArn", task.getContainerInstanceArn());
-    attributes.put("group", task.getGroup());
-    attributes.put("containers", task.getContainers());
-    attributes.put("lastStatus", task.getLastStatus());
-    attributes.put("desiredStatus", task.getDesiredStatus());
-    attributes.put("healthStatus", task.getHealthStatus());
-    if (task.getStartedAt() != null) {
-      attributes.put("startedAt", task.getStartedAt().getTime());
+    attributes.put("taskArn", task.taskArn());
+    attributes.put("clusterArn", task.clusterArn());
+    attributes.put("containerInstanceArn", task.containerInstanceArn());
+    attributes.put("group", task.group());
+    attributes.put("containers", task.containers());
+    attributes.put("lastStatus", task.lastStatus());
+    attributes.put("desiredStatus", task.desiredStatus());
+    attributes.put("healthStatus", task.healthStatusAsString());
+    if (task.startedAt() != null) {
+      attributes.put("startedAt", task.startedAt().toEpochMilli());
     }
-    attributes.put("attachments", task.getAttachments());
-    attributes.put("availabilityZone", task.getAvailabilityZone());
+    attributes.put("attachments", task.attachments());
+    attributes.put("availabilityZone", task.availabilityZone());
 
     return attributes;
   }

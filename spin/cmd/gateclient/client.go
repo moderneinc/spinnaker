@@ -40,13 +40,13 @@ import (
 	"golang.org/x/oauth2/google"
 	"sigs.k8s.io/yaml"
 
-	"github.com/spinnaker/spin/cmd/output"
-	"github.com/spinnaker/spin/config"
-	"github.com/spinnaker/spin/config/auth"
-	iap "github.com/spinnaker/spin/config/auth/iap"
-	gate "github.com/spinnaker/spin/gateapi"
-	"github.com/spinnaker/spin/util"
-	"github.com/spinnaker/spin/version"
+	"github.com/spinnaker/spinnaker/spin/cmd/output"
+	"github.com/spinnaker/spinnaker/spin/config"
+	"github.com/spinnaker/spinnaker/spin/config/auth"
+	iap "github.com/spinnaker/spinnaker/spin/config/auth/iap"
+	gate "github.com/spinnaker/spinnaker/spin/gateapi"
+	"github.com/spinnaker/spinnaker/spin/util"
+	"github.com/spinnaker/spinnaker/spin/version"
 )
 
 const (
@@ -141,7 +141,12 @@ func NewGateClient(ui output.Ui, gateEndpoint, defaultHeaders, configLocation st
 		}
 	}
 
-	gateClient.Context, err = ContextWithAuth(gateClient.Context, gateClient.Config.Auth)
+	var iapUpdated bool
+	gateClient.Context, iapUpdated, err = ContextWithAuth(gateClient.Context, gateClient.Config.Auth)
+	if err != nil {
+		ui.Error(fmt.Sprintf("Context authentication failed: %v", err))
+		return nil, unwrapErr(ui, err)
+	}
 
 	if ignoreCertErrors {
 		if httpClient.Transport.(*http.Transport).TLSClientConfig == nil {
@@ -178,6 +183,31 @@ func NewGateClient(ui output.Ui, gateEndpoint, defaultHeaders, configLocation st
 			return nil, unwrapErr(ui, err)
 		}
 
+		// Set the access token in the context so it is sent as a Bearer token
+		// on every API request, rather than relying solely on session cookies.
+		if gateClient.Config.Auth.OAuth2.CachedToken != nil {
+			gateClient.Context = context.WithValue(gateClient.Context, gate.ContextAccessToken, gateClient.Config.Auth.OAuth2.CachedToken.AccessToken)
+
+			// The generated gate client never consumes ContextAccessToken, so
+			// inject the Bearer header at the transport level for requests to
+			// the gate host. Without this, API calls carry no Authorization
+			// header at all and depend on a session cookie that a gate running
+			// Spring Security oauth2Login() never issues to non-browser clients.
+			if gateURL, err := url.Parse(gateClient.GateEndpoint()); err == nil {
+				oauth2Config := gateClient.Config.Auth.OAuth2
+				httpClient.Transport = &bearerAuthTransport{
+					next:     httpClient.Transport,
+					gateHost: gateURL.Host,
+					tokenFn: func() string {
+						if oauth2Config.CachedToken != nil {
+							return oauth2Config.CachedToken.AccessToken
+						}
+						return ""
+					},
+				}
+			}
+		}
+
 		updatedMessage = "Caching oauth2 token."
 	}
 
@@ -188,6 +218,11 @@ func NewGateClient(ui output.Ui, gateEndpoint, defaultHeaders, configLocation st
 			return nil, unwrapErr(ui, err)
 		}
 		updatedMessage = "Caching gsa token."
+	}
+
+	if iapUpdated {
+		updatedConfig = true
+		updatedMessage = "Caching IAP token."
 	}
 
 	if updatedConfig {
@@ -215,16 +250,37 @@ func NewGateClient(ui output.Ui, gateEndpoint, defaultHeaders, configLocation st
 		}
 	}
 
+	if gateClient.Config.Auth != nil && gateClient.Config.Auth.Enabled && gateClient.Config.Auth.ApiToken != nil {
+		if !gateClient.Config.Auth.ApiToken.IsValid() {
+			return nil, fmt.Errorf("incorrect API token configuration: token must not be empty")
+		}
+		m["X-Spinnaker-Token"] = gateClient.Config.Auth.ApiToken.Token
+	}
+
+	// Parse gate endpoint URL to extract host and scheme for OpenAPI Generator configuration
+	gateURL, err := url.Parse(gateClient.GateEndpoint())
+	if err != nil {
+		ui.Error(fmt.Sprintf("Invalid Gate endpoint URL: %v", err))
+		return nil, err
+	}
+
 	cfg := &gate.Configuration{
-		BasePath:      gateClient.GateEndpoint(),
+		Host:          gateURL.Host,
+		Scheme:        gateURL.Scheme,
 		DefaultHeader: m,
 		UserAgent:     fmt.Sprintf("%s/%s", version.UserAgent, version.String()),
 		HTTPClient:    httpClient,
+		Servers: gate.ServerConfigurations{
+			{
+				URL:         gateClient.GateEndpoint(),
+				Description: "Spinnaker Gate API",
+			},
+		},
 	}
 	gateClient.APIClient = gate.NewAPIClient(cfg)
 
 	// TODO: Verify version compatibility between Spin CLI and Gate.
-	_, _, err = gateClient.VersionControllerApi.GetVersion(gateClient.Context)
+	_, _, err = gateClient.VersionControllerAPI.GetVersion(gateClient.Context).Execute()
 	if err != nil {
 		ui.Error("Could not reach Gate, please ensure it is running. Failing.")
 		return nil, err
@@ -272,6 +328,26 @@ func userConfig(gateClient *GatewayClient, configLocation string) error {
 		gateClient.Config = config.Config{}
 	}
 	return nil
+}
+
+// bearerAuthTransport injects the cached OAuth2 access token as a Bearer
+// Authorization header on requests to the gate host that do not already
+// carry one. Scoped to the gate host so the token is not replayed to other
+// hosts on redirects (e.g. the identity provider).
+type bearerAuthTransport struct {
+	next     http.RoundTripper
+	gateHost string
+	tokenFn  func() string
+}
+
+func (b *bearerAuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.Header.Get("Authorization") == "" && req.URL.Host == b.gateHost {
+		if token := b.tokenFn(); token != "" {
+			req = req.Clone(req.Context())
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+	}
+	return b.next.RoundTrip(req)
 }
 
 // InitializeHTTPClient will return an *http.Client configured with
@@ -357,28 +433,29 @@ func Authenticate(output func(string), httpClient *http.Client, endpoint string,
 // ContextWithAuth will set context variables that maybe necessary for IAP or Basic
 // authentication per-request.  This can be used in conjunction with AddAuthHeaders
 // to ensure auth headers from the context are added to all requests.
-func ContextWithAuth(ctx context.Context, auth *auth.Config) (context.Context, error) {
+// Returns: context, whether config was updated (for IAP token caching), error.
+func ContextWithAuth(ctx context.Context, auth *auth.Config) (context.Context, bool, error) {
 	if auth != nil && auth.Enabled && auth.Iap != nil {
-		accessToken, err := authenticateIAP(auth)
+		accessToken, updated, err := authenticateIAP(auth)
 		ctx = context.WithValue(ctx, gate.ContextAccessToken, accessToken)
-		return ctx, err
+		return ctx, updated, err
 	} else if auth != nil && auth.Enabled && auth.Basic != nil {
 		if !auth.Basic.IsValid() {
-			return nil, errors.New("Incorrect Basic auth configuration. Must include username and password.")
+			return nil, false, errors.New("Incorrect Basic auth configuration. Must include username and password.")
 		}
 		ctx = context.WithValue(ctx, gate.ContextBasicAuth, gate.BasicAuth{
 			UserName: auth.Basic.Username,
 			Password: auth.Basic.Password,
 		})
-		return ctx, nil
+		return ctx, false, nil
 	}
-	return ctx, nil
+	return ctx, false, nil
 }
 
 // AddAuthHeaders will use the context variables to set via ContextWithAuth
 // to add any necessary authentication headers to the request.
 func AddAuthHeaders(ctx context.Context, req *http.Request) error {
-	if ctx != nil {
+	if ctx == nil {
 		return nil
 	}
 
@@ -484,10 +561,9 @@ func authenticateOAuth2(output func(string), httpClient *http.Client, endpoint s
 	return false, nil
 }
 
-func authenticateIAP(auth *auth.Config) (string, error) {
+func authenticateIAP(auth *auth.Config) (string, bool, error) {
 	iapConfig := auth.Iap
-	token, err := iap.GetIapToken(*iapConfig)
-	return token, err
+	return iap.GetIapToken(iapConfig)
 }
 
 func authenticateGoogleServiceAccount(httpClient *http.Client, endpoint string, auth *auth.Config) (updatedConfig bool, err error) {

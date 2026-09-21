@@ -19,6 +19,7 @@ package com.netflix.spinnaker.clouddriver.google.deploy.validators
 import com.netflix.spinnaker.clouddriver.deploy.ValidationErrors
 import com.netflix.spinnaker.clouddriver.google.deploy.GCEUtil
 import com.netflix.spinnaker.clouddriver.google.deploy.description.BaseGoogleInstanceDescription
+import com.netflix.spinnaker.clouddriver.google.deploy.description.BasicGoogleDeployDescription
 import com.netflix.spinnaker.clouddriver.google.model.GoogleAutoHealingPolicy
 import com.netflix.spinnaker.clouddriver.google.model.GoogleAutoscalingPolicy
 import com.netflix.spinnaker.clouddriver.google.model.GoogleDisk
@@ -28,7 +29,7 @@ import com.netflix.spinnaker.clouddriver.google.security.GoogleCredentials
 import com.netflix.spinnaker.clouddriver.google.security.GoogleNamedAccountCredentials
 import com.netflix.spinnaker.credentials.CredentialsRepository
 import com.netflix.spinnaker.kork.artifacts.model.Artifact
-import org.springframework.scheduling.support.CronSequenceGenerator
+import org.springframework.scheduling.support.CronExpression
 
 /**
  * Common validation routines for standard description attributes.
@@ -512,7 +513,7 @@ class StandardGceAttributeValidator {
     }
   }
 
-  def validateAutoHealingPolicy(GoogleAutoHealingPolicy policy, boolean rejectEmptyMaxUnavailable = true) {
+  def validateAutoHealingPolicy(GoogleAutoHealingPolicy policy) {
     policy?.with {
       if (initialDelaySec != null) {
         validateNonNegativeLong(initialDelaySec, "autoHealingPolicy.initialDelaySec")
@@ -520,19 +521,40 @@ class StandardGceAttributeValidator {
 
       if (healthCheck != null) {
         validateName(healthCheck, "autoHealingPolicy.healthCheck")
-
-        maxUnavailable?.with {
-          if (fixed != null) {
-            validateNonNegativeLong(fixed as int, "autoHealingPolicy.maxUnavailable.fixed")
-          } else if (percent != null) {
-            validateInRangeInclusive(percent as int,
-              0, 100, "autoHealingPolicy.maxUnavailable.percent")
-          } else if (rejectEmptyMaxUnavailable) {
-            this.errors.rejectValue("autoHealingPolicy.maxUnavailable",
-              "${this.context}.autoHealingPolicy.maxUnavailable.neitherFixedNorPercent")
-          }
-        }
       }
+
+      // Stable Compute v1 autoHealingPolicies only support healthCheck and initialDelaySec.
+      // Reject every non-null maxUnavailable (including empty objects) so callers cannot
+      // silently lose a safety setting that the API no longer accepts.
+      if (maxUnavailable != null) {
+        this.errors.rejectValue(
+          "autoHealingPolicy.maxUnavailable",
+          "${this.context}.autoHealingPolicy.maxUnavailable.unsupportedOnStableComputeV1",
+          "autoHealingPolicy.maxUnavailable is not supported on Compute Engine stable v1. " +
+            "Omit the field; auto-healing concurrency is not controlled by this property on v1 MIGs.")
+      }
+    }
+  }
+
+  def validateExplicitZoneIntent(BasicGoogleDeployDescription description) {
+    // selectZones is explicit placement intent; rejecting incomplete intent prevents the handler
+    // from silently creating a different regional distribution.
+    if (description?.selectZones != true) {
+      return
+    }
+
+    if (description.regional != true) {
+      errors.rejectValue(
+        "selectZones",
+        "${context}.selectZones.requiresRegional",
+        "selectZones requires a regional server group.")
+    }
+
+    if (!description.distributionPolicy?.zones) {
+      errors.rejectValue(
+        "distributionPolicy.zones",
+        "${context}.distributionPolicy.zones.requiredWhenSelectZones",
+        "distributionPolicy.zones must contain at least one zone when selectZones is true.")
     }
   }
 
@@ -565,9 +587,12 @@ class StandardGceAttributeValidator {
   }
 
   def validateCronExpression(String expression, String attribute) {
-    def result = CronSequenceGenerator.isValidExpression("* " + expression)
-    if(!result){
+    def result = true
+    try {
+      CronExpression.parse("* " + expression)
+    } catch (IllegalArgumentException e) {
       errors.rejectValue attribute, "${context}.${attribute} must be a valid CRON expression."
+      result = false
     }
     return result
   }

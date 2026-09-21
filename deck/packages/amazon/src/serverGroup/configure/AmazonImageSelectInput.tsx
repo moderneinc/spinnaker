@@ -1,4 +1,3 @@
-import { $q } from 'ngimport';
 import React from 'react';
 import type { HandlerRendererResult, MenuRendererProps, Option, OptionValues, ReactSelectProps } from 'react-select';
 import {
@@ -40,7 +39,7 @@ export class AmazonImageSelectInput extends React.Component<IAmazonImageSelector
     errorMessage: null,
     selectionMode: 'packageImages',
     searchString: '',
-    searchResults: null,
+    searchResults: [],
     isSearching: false,
     packageImages: null,
     isLoadingPackageImages: true,
@@ -64,7 +63,7 @@ export class AmazonImageSelectInput extends React.Component<IAmazonImageSelector
     return { imageName, amis, attributes } as IAmazonImage;
   }
 
-  private loadImagesFromApplicationName(application: Application): PromiseLike<IAmazonImage[]> {
+  private loadImagesFromApplicationName(application: Application): Promise<IAmazonImage[]> {
     const query = application.name.replace(/_/g, '[_\\-]') + '*';
     return this.awsImageReader.findImages({ q: query });
   }
@@ -82,13 +81,15 @@ export class AmazonImageSelectInput extends React.Component<IAmazonImageSelector
     return tooShort ? null : packageBase + (addDashToQuery ? '-*' : '*');
   }
 
-  private loadImageById(imageId: string, region: string, credentials: string): PromiseLike<IAmazonImage> {
-    return !imageId ? $q.when(null) : this.awsImageReader.getImage(imageId, region, credentials).catch(() => null);
+  private loadImageById(imageId: string, region: string, credentials: string): Promise<IAmazonImage> {
+    return !imageId
+      ? Promise.resolve(null)
+      : this.awsImageReader.getImage(imageId, region, credentials).catch(() => null);
   }
 
-  private searchForImages(query: string): PromiseLike<IAmazonImage[]> {
+  private searchForImages(query: string): Promise<IAmazonImage[]> {
     const hasMinLength = query && query.length >= 3;
-    return hasMinLength ? this.awsImageReader.findImages({ q: query }) : $q.when([]);
+    return hasMinLength ? this.awsImageReader.findImages({ q: query }) : Promise.resolve([]);
   }
 
   private fetchPackageImages(
@@ -96,7 +97,7 @@ export class AmazonImageSelectInput extends React.Component<IAmazonImageSelector
     region: string,
     credentials: string,
     application: Application,
-  ): PromiseLike<IAmazonImage[]> {
+  ): Promise<IAmazonImage[]> {
     const imageId = value && value.amis && value.amis[region] && value.amis[region][0];
 
     return this.loadImageById(imageId, region, credentials).then((image) => {
@@ -214,15 +215,19 @@ export class AmazonImageSelectInput extends React.Component<IAmazonImageSelector
   private buildImageMenu = (params: MenuRendererProps): HandlerRendererResult => {
     const { ImageMenuHeading, ImageLabel } = this;
     const { options } = params;
+    // Note: react-select's renderOuter() already wraps whatever this returns in its own
+    // ".Select-menu-outer > .Select-menu" pair (which is what TetheredSelect repositions
+    // via Tether). Re-wrapping here duplicates that structure with a second ".Select-menu-outer",
+    // which keeps its default `position: absolute` styling and collapses the real, tethered
+    // container's height - the list still renders, but the clickable area no longer lines up
+    // with what's painted on screen, so selecting an option silently does nothing.
     return (
-      <div className="Select-menu-outer">
-        <div className="Select-menu" role="listbox">
-          {options.length > 0 && <ImageMenuHeading />}
-          {options.map((o) => (
-            <ImageLabel key={o.imageName} option={o} params={params} />
-          ))}
-        </div>
-      </div>
+      <>
+        {options.length > 0 && <ImageMenuHeading />}
+        {options.map((o) => (
+          <ImageLabel key={o.imageName} option={o} params={params} />
+        ))}
+      </>
     );
   };
 
@@ -269,7 +274,13 @@ export class AmazonImageSelectInput extends React.Component<IAmazonImageSelector
     return (
       <div
         key={option.imageName}
-        onClick={() => params.selectValue(option)}
+        onMouseDown={(event) => {
+          // Match react-select's own Option component: select on mousedown (not click) and
+          // prevent the default browser action so the input doesn't blur/close the menu first.
+          event.preventDefault();
+          event.stopPropagation();
+          params.selectValue(option);
+        }}
         onMouseOver={() => params.focusOption(option)}
         className={`Select-option ${
           params.focusedOption && params.focusedOption.imageName === option.imageName ? 'is-focused' : ''
@@ -358,7 +369,7 @@ export class AmazonImageSelectInput extends React.Component<IAmazonImageSelector
             placeholder="Search for an image..."
             filterOptions={false as any}
             noResultsText={searchNoResultsText}
-            options={searchResults}
+            options={searchResults ?? []}
             onInputChange={(searchInput) => {
               this.searchInput$.next(searchInput);
               return searchInput;
@@ -366,6 +377,14 @@ export class AmazonImageSelectInput extends React.Component<IAmazonImageSelector
             onChange={onChange}
           />
           {error}
+          <button
+            type="button"
+            className="link"
+            onClick={() => this.setState({ selectionMode: 'packageImages', searchString: '', searchResults: null })}
+          >
+            Back to Package Images
+          </button>{' '}
+          <HelpField id="aws.serverGroup.allImages" />
         </div>
       );
     } else if (isPackageImagesLoaded) {

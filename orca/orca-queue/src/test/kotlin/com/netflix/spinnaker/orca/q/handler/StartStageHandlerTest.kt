@@ -23,6 +23,7 @@ import com.netflix.spinnaker.assertj.assertSoftly
 import com.netflix.spinnaker.orca.DefaultStageResolver
 import com.netflix.spinnaker.orca.NoOpTaskImplementationResolver
 import com.netflix.spinnaker.orca.api.pipeline.SyntheticStageOwner.STAGE_BEFORE
+import com.netflix.spinnaker.orca.api.pipeline.models.ExecutionStatus.NOT_STARTED
 import com.netflix.spinnaker.orca.api.pipeline.models.ExecutionStatus.FAILED_CONTINUE
 import com.netflix.spinnaker.orca.api.pipeline.models.ExecutionStatus.RUNNING
 import com.netflix.spinnaker.orca.api.pipeline.models.ExecutionStatus.SUCCEEDED
@@ -66,23 +67,23 @@ import com.netflix.spinnaker.orca.q.zeroTaskStage
 import com.netflix.spinnaker.q.Queue
 import com.netflix.spinnaker.spek.and
 import com.netflix.spinnaker.time.fixedClock
-import com.nhaarman.mockito_kotlin.any
-import com.nhaarman.mockito_kotlin.anyOrNull
-import com.nhaarman.mockito_kotlin.atLeastOnce
-import com.nhaarman.mockito_kotlin.argumentCaptor
-import com.nhaarman.mockito_kotlin.check
-import com.nhaarman.mockito_kotlin.doReturn
-import com.nhaarman.mockito_kotlin.doThrow
-import com.nhaarman.mockito_kotlin.eq
-import com.nhaarman.mockito_kotlin.isA
-import com.nhaarman.mockito_kotlin.mock
-import com.nhaarman.mockito_kotlin.never
-import com.nhaarman.mockito_kotlin.reset
-import com.nhaarman.mockito_kotlin.times
-import com.nhaarman.mockito_kotlin.spy
-import com.nhaarman.mockito_kotlin.verify
-import com.nhaarman.mockito_kotlin.verifyNoMoreInteractions
-import com.nhaarman.mockito_kotlin.whenever
+import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.atLeastOnce
+import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.check
+import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.doThrow
+import org.mockito.kotlin.eq
+import org.mockito.kotlin.isA
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.reset
+import org.mockito.kotlin.times
+import org.mockito.kotlin.spy
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.verifyNoMoreInteractions
+import org.mockito.kotlin.whenever
 import java.time.Duration
 import org.assertj.core.api.Assertions.assertThat
 import org.jetbrains.spek.api.dsl.context
@@ -93,6 +94,7 @@ import org.jetbrains.spek.api.dsl.on
 import org.jetbrains.spek.api.lifecycle.CachingMode.GROUP
 import org.jetbrains.spek.subject.SubjectSpek
 import org.springframework.context.ApplicationEventPublisher
+import redis.clients.jedis.exceptions.JedisConnectionException
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -1353,6 +1355,114 @@ object StartStageHandlerTest : SubjectSpek<StartStageHandler>({
 
       it("emits an error event") {
         verify(queue).push(isA<InvalidStageId>())
+      }
+    }
+  }
+
+  describe("handling transient Redis exceptions") {
+    given("a JedisConnectionException is thrown during stage.start()") {
+      val pipeline = pipeline {
+        application = "test"
+        stage {
+          refId = "1"
+          type = singleTaskStage.type
+        }
+      }
+      val message = StartStage(pipeline.stageByRef("1"))
+
+      and("the exception handler marks it as retryable") {
+        val retryableResponse = ExceptionHandler.Response(
+          "JedisConnectionException",
+          "dummy",
+          ExceptionHandler.responseDetails("Transient Redis Failure"),
+          true
+        )
+
+        beforeGroup {
+          whenever(repository.retrieve(PIPELINE, message.executionId)) doReturn pipeline
+          whenever(exceptionHandler.handles(any())) doReturn true
+          whenever(exceptionHandler.handle(anyOrNull(), any())) doReturn retryableResponse
+          whenever(queue.push(isA<StartTask>())) doThrow JedisConnectionException("Read timed out")
+        }
+
+        afterGroup(::resetMocks)
+
+        on("receiving a message") {
+          subject.handle(message)
+        }
+
+        it("retries via queue push with delay instead of completing the stage") {
+          verify(queue).push(eq(message), eq(retryDelay))
+        }
+
+        it("does not push CompleteStage") {
+          verify(queue, never()).push(isA<CompleteStage>())
+        }
+
+        it("resets stage status to NOT_STARTED") {
+          assertThat(pipeline.stageByRef("1").status).isEqualTo(NOT_STARTED)
+        }
+
+        it("does not mark the stage as permanently failed") {
+          assertThat(pipeline.stageByRef("1").context["beforeStagePlanningFailed"]).isNull()
+        }
+      }
+    }
+
+    given("a JedisConnectionException is thrown in the outer catch block") {
+      val pipeline = pipeline {
+        application = "test"
+        stage {
+          refId = "1"
+          type = singleTaskStage.type
+        }
+      }
+      val message = StartStage(pipeline.stageByRef("1"))
+
+      and("both the initial push and the retry push fail with JedisConnectionException") {
+        val retryableResponse = ExceptionHandler.Response(
+          "JedisConnectionException",
+          "dummy",
+          ExceptionHandler.responseDetails("Transient Redis Failure"),
+          true
+        )
+
+        var thrownException: Exception? = null
+
+        beforeGroup {
+          whenever(repository.retrieve(PIPELINE, message.executionId)) doReturn pipeline
+          whenever(exceptionHandler.handles(any())) doReturn true
+          whenever(exceptionHandler.handle(anyOrNull(), any())) doReturn retryableResponse
+          whenever(queue.push(isA<StartTask>())) doThrow JedisConnectionException("Read timed out")
+          whenever(queue.push(any(), any<Duration>())) doThrow JedisConnectionException("Read timed out")
+        }
+
+        afterGroup(::resetMocks)
+
+        on("receiving a message") {
+          try {
+            subject.handle(message)
+          } catch (e: Exception) {
+            thrownException = e
+          }
+        }
+
+        it("rethrows the exception so the message is not acked") {
+          assertThat(thrownException).isInstanceOf(JedisConnectionException::class.java)
+        }
+
+        it("resets stage status to NOT_STARTED") {
+          assertThat(pipeline.stageByRef("1").status).isEqualTo(NOT_STARTED)
+        }
+
+        it("does not push CompleteStage") {
+          verify(queue, never()).push(isA<CompleteStage>())
+        }
+
+        it("does not bake permanent failure into stage context") {
+          assertThat(pipeline.stageByRef("1").context["beforeStagePlanningFailed"]).isNull()
+          assertThat(pipeline.stageByRef("1").context["exception"]).isNull()
+        }
       }
     }
   }

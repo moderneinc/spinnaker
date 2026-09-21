@@ -105,7 +105,7 @@ public class PipelineController {
   }
 
   @PreAuthorize("#restricted ? @fiatPermissionEvaluator.storeWholePermission() : true")
-  @PostFilter("#restricted ? hasPermission(filterObject.name, 'APPLICATION', 'READ') : true")
+  @PostFilter("#restricted ? hasPermission(filterObject.application, 'APPLICATION', 'READ') : true")
   @RequestMapping(value = "", method = RequestMethod.GET)
   public Collection<Pipeline> list(
       @RequestParam(required = false, value = "restricted", defaultValue = "true")
@@ -160,8 +160,10 @@ public class PipelineController {
    * @param status the execution status of the pipeline (canceled/suspended/succeeded)
    */
   @PreAuthorize("#restricted ? @fiatPermissionEvaluator.storeWholePermission() : true")
-  @PostFilter("#restricted ? hasPermission(filterObject.name, 'APPLICATION', 'READ') : true")
-  @RequestMapping(value = "triggeredBy/{id:.+}/{status}", method = RequestMethod.GET)
+  @PostFilter("#restricted ? hasPermission(filterObject.application, 'APPLICATION', 'READ') : true")
+  @RequestMapping(
+      value = {"triggeredBy/{id:.+}/{status}", "triggeredBy/{id:.+}/{status}/"},
+      method = RequestMethod.GET)
   public Collection<Pipeline> getTriggeredPipelines(
       @PathVariable String id,
       @PathVariable String status,
@@ -285,7 +287,9 @@ public class PipelineController {
 
   @PreAuthorize("@fiatPermissionEvaluator.storeWholePermission()")
   @PostAuthorize("hasPermission(returnObject.application, 'APPLICATION', 'READ')")
-  @RequestMapping(value = "{application:.+}/name/{name:.+}", method = RequestMethod.GET)
+  @RequestMapping(
+      value = {"{application:.+}/name/{name:.+}", "{application:.+}/name/{name:.+}/"},
+      method = RequestMethod.GET)
   public Pipeline getByApplicationAndName(
       @PathVariable String application,
       @PathVariable String name,
@@ -542,6 +546,7 @@ public class PipelineController {
 
     // Run stale pipeline definition check
     if (staleCheck
+        && pipelineControllerConfig.getSave().isStaleCheckEnabled()
         && !Strings.isNullOrEmpty(pipeline.getId())
         && pipeline.getLastModified() != null) {
       checkForStalePipeline(pipeline, errors);
