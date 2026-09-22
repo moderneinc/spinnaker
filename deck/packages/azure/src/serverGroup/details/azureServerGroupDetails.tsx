@@ -23,6 +23,7 @@ import {
   withRouter,
 } from '@spinnaker/core';
 
+import { AzureResizeServerGroupModal } from './resize/AzureResizeServerGroupModal';
 import { AzureRollbackServerGroupModal } from './rollback/RollbackServerGroupModal';
 
 function findServerGroupSummary(props: IServerGroupDetailsProps): Promise<any> {
@@ -208,6 +209,10 @@ export function AzureServerGroupActionsComponent({
     AzureRollbackServerGroupModal.show({ application: app, serverGroup, disabledServerGroups }, runtimeServices);
   };
 
+  const resizeServerGroup = (): void => {
+    AzureResizeServerGroupModal.show({ application: app, serverGroup }, runtimeServices);
+  };
+
   const cloneServerGroup = (): void => {
     const CloneServerGroupModal = CloudProviderRegistry.getValue('azure', 'serverGroup.CloneServerGroupModal');
     if (CloneServerGroupModal?.show) {
@@ -228,6 +233,11 @@ export function AzureServerGroupActionsComponent({
             </a>
           </li>
         )}
+        <li>
+          <a className="clickable" onClick={resizeServerGroup}>
+            Resize
+          </a>
+        </li>
         <li>
           <a className="clickable" onClick={disableServerGroup}>
             Disable

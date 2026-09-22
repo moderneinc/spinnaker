@@ -17,9 +17,10 @@ function toggleConsideredStage(current: StageRefId[], refId: StageRefId, checked
 
 export function AzureTagImageStageConfig({ pipeline, stage, updateStageField }: IStageConfigProps) {
   const consideredStages: StageRefId[] = stage.consideredStages || [];
-  const imageProducingStages = PipelineConfigService.getAllUpstreamDependencies(pipeline, stage).filter(
-    (upstreamStage) => StageConstants.IMAGE_PRODUCING_STAGES.includes(upstreamStage.type),
-  );
+  const imageProducingStages = PipelineConfigService.getAllUpstreamDependencies(
+    pipeline,
+    stage,
+  ).filter((upstreamStage) => StageConstants.IMAGE_PRODUCING_STAGES.includes(upstreamStage.type));
   const availableRefIds = new Set(imageProducingStages.map((upstreamStage) => upstreamStage.refId));
   const staleRefIds = consideredStages.filter((refId) => !availableRefIds.has(refId));
 
