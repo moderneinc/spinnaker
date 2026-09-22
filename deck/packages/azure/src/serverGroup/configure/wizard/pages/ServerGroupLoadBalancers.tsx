@@ -40,6 +40,74 @@ export class ServerGroupLoadBalancers extends AzureWizardPage {
 
   private loadVnetSubnetsRequestId = 0;
 
+  // Load balancers may live outside the application's own resource group. Only
+  // the default group's are offered until the user asks for all of them, since
+  // listing every load balancer in the subscription is slow.
+  private availableResourceGroups: string[] = [];
+  private allLoadBalancersLoaded = false;
+  private refreshing = false;
+
+  private defaultResourceGroup(): string {
+    const { application, region } = this.props.formik.values;
+    return `${application}-${String(region || '')
+      .replace(/\s/g, '')
+      .toLowerCase()}`;
+  }
+
+  private loadBalancersInResourceGroup(resourceGroup: string | null): string[] {
+    const { values } = this.props.formik;
+    const loadBalancers = values.backingData?.loadBalancers || [];
+    const names = loadBalancers
+      .filter(
+        (candidate: any) =>
+          candidate.account === values.credentials &&
+          candidate.region === values.region &&
+          (!resourceGroup || !candidate.resourceGroup || candidate.resourceGroup === resourceGroup),
+      )
+      .map((candidate: any) => candidate.name);
+    return Array.from(new Set<string>(names)).sort();
+  }
+
+  private applyResourceGroupFilter(resourceGroup: string | null): void {
+    this.setField('loadBalancers', this.loadBalancersInResourceGroup(resourceGroup));
+  }
+
+  private resourceGroupChanged = (resourceGroup: string): void => {
+    this.setField('loadBalancerResourceGroup', resourceGroup || null);
+    this.setField('backendPoolName', null);
+    this.applyResourceGroupFilter(resourceGroup || null);
+    void this.loadBalancerChanged(null, true);
+  };
+
+  private showAllLoadBalancers = async (): Promise<void> => {
+    this.refreshing = true;
+    this.forceUpdate();
+    try {
+      const summaries: any[] = await this.context.services.loadBalancerReader.listLoadBalancers('azure');
+      const flattened = summaries.flatMap((summary: any) =>
+        (summary.accounts || []).flatMap((account: any) =>
+          (account.regions || []).flatMap((region: any) => region.loadBalancers || []),
+        ),
+      );
+      this.setField('backingData.loadBalancers', flattened);
+      const { values } = this.props.formik;
+      const groups = flattened
+        .filter(
+          (candidate: any) =>
+            candidate.account === values.credentials && candidate.region === values.region && candidate.resourceGroup,
+        )
+        .map((candidate: any) => candidate.resourceGroup);
+      const unique = Array.from(new Set<string>(groups)).sort();
+      const defaultGroup = this.defaultResourceGroup();
+      this.availableResourceGroups = unique.includes(defaultGroup) ? unique : [defaultGroup, ...unique];
+      this.applyResourceGroupFilter(values.loadBalancerResourceGroup || null);
+      this.allLoadBalancersLoaded = true;
+    } finally {
+      this.refreshing = false;
+      this.forceUpdate();
+    }
+  };
+
   private getCommandLoadBalancer(loadBalancerName: string | null): any {
     const { values } = this.props.formik;
     const loadBalancers = values.backingData?.loadBalancers || [];
@@ -58,6 +126,12 @@ export class ServerGroupLoadBalancers extends AzureWizardPage {
     if (values.credentials && values.region) {
       values.viewState.networkSettingsConfigured = true;
       values.selectedVnetSubnets = values.selectedVnetSubnets || [];
+      const resourceGroup = values.loadBalancerResourceGroup || this.defaultResourceGroup();
+      if (!values.loadBalancerResourceGroup) {
+        this.setField('loadBalancerResourceGroup', resourceGroup);
+      }
+      this.availableResourceGroups = [resourceGroup];
+      this.applyResourceGroupFilter(resourceGroup);
       if (values.loadBalancerName) {
         void this.loadBalancerChanged(values.loadBalancerName);
       } else {
@@ -186,6 +260,22 @@ export class ServerGroupLoadBalancers extends AzureWizardPage {
     return (
       <div className="container-fluid form-horizontal">
         <div className="form-group">
+          <div className="col-md-3 sm-label-right">Resource Group</div>
+          <div className="col-md-7">
+            <select
+              className="form-control input-sm"
+              onChange={(event) => this.resourceGroupChanged(event.target.value)}
+              value={this.props.formik.values.loadBalancerResourceGroup || ''}
+            >
+              {this.availableResourceGroups.map((resourceGroup) => (
+                <option key={resourceGroup} value={resourceGroup}>
+                  {resourceGroup}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="form-group">
           <div className="col-md-3 sm-label-right">Load Balancer</div>
           <div className="col-md-7">
             <select
@@ -202,10 +292,45 @@ export class ServerGroupLoadBalancers extends AzureWizardPage {
             </select>
           </div>
         </div>
+        {!this.allLoadBalancersLoaded && (
+          <div className="form-group">
+            <div className="col-md-7 col-md-offset-3 small">
+              {this.refreshing ? (
+                <span>
+                  <span className="fa fa-sync-alt fa-spin" /> refreshing...
+                </span>
+              ) : (
+                <span>
+                  If you are looking for a load balancer from a different resource group,{' '}
+                  <a className="clickable" onClick={this.showAllLoadBalancers}>
+                    click here
+                  </a>{' '}
+                  to load all load balancers.
+                </span>
+              )}
+            </div>
+          </div>
+        )}
         {this.props.formik.values.loadBalancerName && (
           <div className="well-compact text-center">
             The load balancer {this.props.formik.values.loadBalancerName} is an{' '}
             {this.props.formik.values.loadBalancerType}
+          </div>
+        )}
+        {this.props.formik.values.loadBalancerName && (
+          <div className="form-group">
+            <div className="col-md-3 sm-label-right">Backend Pool</div>
+            <div className="col-md-7">
+              <input
+                className="form-control input-sm"
+                onChange={(event) => this.setField('backendPoolName', event.target.value)}
+                type="text"
+                value={this.props.formik.values.backendPoolName || ''}
+              />
+              <div className="small text-muted">
+                Name of the backend address pool to place the server group into. If empty, no pool association is made.
+              </div>
+            </div>
           </div>
         )}
       </div>
