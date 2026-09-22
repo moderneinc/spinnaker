@@ -16,6 +16,9 @@ import { registerAzureBakeStage } from './pipeline/stages/bake/azureBakeStage';
 import { registerAzureDestroyAsgStage } from './pipeline/stages/destroyAsg/azureDestroyAsgStage';
 import { registerAzureDisableAsgStage } from './pipeline/stages/disableAsg/azureDisableAsgStage';
 import { registerAzureEnableAsgStage } from './pipeline/stages/enableAsg/azureEnableAsgStage';
+import { registerAzureFindImageFromTagsStage } from './pipeline/stages/findImageFromTags/AzureFindImageFromTagsStageConfig';
+import { registerAzureResizeAsgStage } from './pipeline/stages/resizeAsg/azureResizeAsgStage';
+import { registerAzureTagImageStage } from './pipeline/stages/tagImage/azureTagImageStage';
 import { AzureSecurityGroupModal } from './securityGroup/configure/AzureSecurityGroupModal';
 import { AzureSecurityGroupDetails } from './securityGroup/details/AzureSecurityGroupDetails';
 import { AzureSecurityGroupReader } from './securityGroup/securityGroup.reader';
@@ -76,6 +79,9 @@ export function registerAzurePipelineStages(): void {
   registerAzureEnableAsgStage();
   registerAzureDisableAsgStage();
   registerAzureBakeStage();
+  registerAzureResizeAsgStage();
+  registerAzureFindImageFromTagsStage();
+  registerAzureTagImageStage();
 }
 
 registerAzureProvider();
