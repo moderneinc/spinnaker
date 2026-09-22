@@ -1,5 +1,7 @@
 import React from 'react';
 
+import { HelpField } from '@spinnaker/core';
+
 import { AzureWizardPage } from './common';
 
 export class ServerGroupAdvancedSettings extends AzureWizardPage {
@@ -108,6 +110,23 @@ export class ServerGroupAdvancedSettings extends AzureWizardPage {
             </div>
           </div>
         )}
+        <div className="form-group">
+          <div className="col-md-4 sm-label-right">
+            Boot Diagnostics Storage URI <HelpField id="azure.serverGroup.bootDiagnosticsStorageUri" />
+          </div>
+          <div className="col-md-7">
+            <input
+              className="form-control input-sm"
+              onChange={(event) => this.setField('bootDiagnosticsStorageUri', event.target.value)}
+              placeholder="https://storageaccount.blob.core.windows.net/"
+              type="text"
+              value={values.bootDiagnosticsStorageUri || ''}
+            />
+            <small className="text-muted">
+              Leave empty to disable boot diagnostics. Storage account must be in the same region.
+            </small>
+          </div>
+        </div>
         <div className="form-group">
           <div className="col-md-4 sm-label-right">User-Assigned Identities</div>
           <div className="col-md-7">
