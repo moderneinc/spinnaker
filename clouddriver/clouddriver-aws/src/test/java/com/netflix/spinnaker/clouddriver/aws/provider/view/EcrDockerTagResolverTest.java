@@ -19,11 +19,12 @@ package com.netflix.spinnaker.clouddriver.aws.provider.view;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.amazonaws.services.ecr.AmazonECR;
-import com.amazonaws.services.ecr.model.DescribeImagesRequest;
-import com.amazonaws.services.ecr.model.DescribeImagesResult;
-import com.amazonaws.services.ecr.model.ImageDetail;
 import com.netflix.spinnaker.clouddriver.aws.security.AmazonClientProvider;
+import software.amazon.awssdk.services.ecr.EcrClient;
+import software.amazon.awssdk.services.ecr.model.DescribeImagesRequest;
+import software.amazon.awssdk.services.ecr.model.DescribeImagesResponse;
+import software.amazon.awssdk.services.ecr.model.ImageDetail;
+import software.amazon.awssdk.services.ecr.model.RepositoryNotFoundException;
 import com.netflix.spinnaker.clouddriver.aws.security.AmazonCredentials;
 import com.netflix.spinnaker.clouddriver.aws.security.NetflixAmazonCredentials;
 import com.netflix.spinnaker.credentials.CredentialsRepository;
@@ -38,7 +39,7 @@ final class EcrDockerTagResolverTest {
 
   private AmazonClientProvider amazonClientProvider;
   private CredentialsRepository<NetflixAmazonCredentials> credentialsRepository;
-  private AmazonECR ecr;
+  private EcrClient ecr;
   private EcrDockerTagResolver target;
 
   @BeforeEach
@@ -46,15 +47,13 @@ final class EcrDockerTagResolverTest {
   void setUp() {
     amazonClientProvider = org.mockito.Mockito.mock(AmazonClientProvider.class);
     credentialsRepository = org.mockito.Mockito.mock(CredentialsRepository.class);
-    ecr = org.mockito.Mockito.mock(AmazonECR.class);
+    ecr = org.mockito.Mockito.mock(EcrClient.class);
 
     NetflixAmazonCredentials creds = stubCredentials("123456789012", "us-west-2");
     org.mockito.Mockito.when(credentialsRepository.getAll()).thenReturn(Set.of(creds));
     org.mockito.Mockito.when(
-            amazonClientProvider.getAmazonEcr(
-                ArgumentMatchers.any(),
-                ArgumentMatchers.eq("us-west-2"),
-                ArgumentMatchers.eq(false)))
+            amazonClientProvider.getAmazonEcrV2(
+                ArgumentMatchers.any(), ArgumentMatchers.eq("us-west-2")))
         .thenReturn(ecr);
 
     target = new EcrDockerTagResolver(amazonClientProvider, credentialsRepository);
@@ -96,7 +95,7 @@ final class EcrDockerTagResolverTest {
   @Test
   void noImageForTag_throws() {
     org.mockito.Mockito.when(ecr.describeImages(ArgumentMatchers.any(DescribeImagesRequest.class)))
-        .thenReturn(new DescribeImagesResult());
+        .thenReturn(DescribeImagesResponse.builder().build());
     assertThatThrownBy(
             () ->
                 target.resolve(
@@ -146,7 +145,7 @@ final class EcrDockerTagResolverTest {
   @Test
   void resolveByName_repositoryNotFound_throws() {
     org.mockito.Mockito.when(ecr.describeImages(ArgumentMatchers.any(DescribeImagesRequest.class)))
-        .thenThrow(new com.amazonaws.services.ecr.model.RepositoryNotFoundException("not found"));
+        .thenThrow(RepositoryNotFoundException.builder().message("not found").build());
     assertThatThrownBy(() -> target.resolveByName("moderne/nonexistent", "latest"))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("not found in any registered ECR account");
@@ -164,10 +163,11 @@ final class EcrDockerTagResolverTest {
   }
 
   private void stubDescribeImages(List<String> tags) {
-    DescribeImagesResult describe =
-        new DescribeImagesResult()
-            .withImageDetails(
-                new ImageDetail().withImageDigest("sha256:abc123").withImageTags(tags));
+    DescribeImagesResponse describe =
+        DescribeImagesResponse.builder()
+            .imageDetails(
+                ImageDetail.builder().imageDigest("sha256:abc123").imageTags(tags).build())
+            .build();
     org.mockito.Mockito.when(ecr.describeImages(ArgumentMatchers.any(DescribeImagesRequest.class)))
         .thenReturn(describe);
   }

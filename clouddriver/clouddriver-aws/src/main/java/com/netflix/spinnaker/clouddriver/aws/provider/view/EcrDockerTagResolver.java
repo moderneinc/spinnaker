@@ -16,11 +16,6 @@
 
 package com.netflix.spinnaker.clouddriver.aws.provider.view;
 
-import com.amazonaws.services.ecr.AmazonECR;
-import com.amazonaws.services.ecr.model.DescribeImagesRequest;
-import com.amazonaws.services.ecr.model.DescribeImagesResult;
-import com.amazonaws.services.ecr.model.ImageDetail;
-import com.amazonaws.services.ecr.model.ImageIdentifier;
 import com.netflix.spinnaker.clouddriver.aws.security.AmazonClientProvider;
 import com.netflix.spinnaker.clouddriver.aws.security.AmazonCredentials;
 import com.netflix.spinnaker.clouddriver.aws.security.NetflixAmazonCredentials;
@@ -34,6 +29,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import software.amazon.awssdk.services.ecr.EcrClient;
+import software.amazon.awssdk.services.ecr.model.DescribeImagesRequest;
+import software.amazon.awssdk.services.ecr.model.DescribeImagesResponse;
+import software.amazon.awssdk.services.ecr.model.ImageDetail;
+import software.amazon.awssdk.services.ecr.model.ImageIdentifier;
+import software.amazon.awssdk.services.ecr.model.RepositoryNotFoundException;
 
 /**
  * Given a fully-qualified ECR image reference whose tag is a moving alias (e.g. {@code latest}),
@@ -71,7 +72,7 @@ public class EcrDockerTagResolver {
               + " which is not enabled on the matched credentials.");
     }
 
-    AmazonECR ecr = amazonClientProvider.getAmazonEcr(credentials, parsed.region, false);
+    EcrClient ecr = amazonClientProvider.getAmazonEcrV2(credentials, parsed.region);
     ImageDetail detail = describeImage(ecr, parsed.accountId, parsed.repository, parsed.tag);
     return resolveFromDetail(detail, reference, parsed.tag);
   }
@@ -89,10 +90,10 @@ public class EcrDockerTagResolver {
       for (AmazonCredentials.AWSRegion awsRegion : credentials.getRegions()) {
         String region = awsRegion.getName();
         try {
-          AmazonECR ecr = amazonClientProvider.getAmazonEcr(credentials, region, false);
+          EcrClient ecr = amazonClientProvider.getAmazonEcrV2(credentials, region);
           ImageDetail detail = describeImage(ecr, null, repository, tag);
           return resolveFromDetail(detail, repository + ":" + tag, tag);
-        } catch (com.amazonaws.services.ecr.model.RepositoryNotFoundException ignored) {
+        } catch (RepositoryNotFoundException ignored) {
           tried.add(credentials.getAccountId() + "/" + region);
         }
       }
@@ -102,26 +103,26 @@ public class EcrDockerTagResolver {
   }
 
   private static ImageDetail describeImage(
-      AmazonECR ecr, String registryId, String repository, String tag) {
-    DescribeImagesRequest request =
-        new DescribeImagesRequest()
-            .withRepositoryName(repository)
-            .withImageIds(new ImageIdentifier().withImageTag(tag));
+      EcrClient ecr, String registryId, String repository, String tag) {
+    DescribeImagesRequest.Builder request =
+        DescribeImagesRequest.builder()
+            .repositoryName(repository)
+            .imageIds(ImageIdentifier.builder().imageTag(tag).build());
     if (registryId != null) {
-      request.withRegistryId(registryId);
+      request.registryId(registryId);
     }
-    DescribeImagesResult result = ecr.describeImages(request);
-    if (result.getImageDetails() == null || result.getImageDetails().isEmpty()) {
+    DescribeImagesResponse result = ecr.describeImages(request.build());
+    if (!result.hasImageDetails() || result.imageDetails().isEmpty()) {
       throw new NotFoundException(
           "No ECR image found for tag " + tag + " in repository " + repository);
     }
-    return result.getImageDetails().get(0);
+    return result.imageDetails().get(0);
   }
 
   private static ResolveResult resolveFromDetail(
       ImageDetail detail, String originalReference, String originalTag) {
     List<String> peerTags =
-        Optional.ofNullable(detail.getImageTags()).orElseGet(Collections::emptyList);
+        detail.hasImageTags() ? detail.imageTags() : Collections.emptyList();
 
     Optional<String> resolved =
         peerTags.stream()
@@ -138,7 +139,7 @@ public class EcrDockerTagResolver {
         "ECR image "
             + originalReference
             + " (digest "
-            + detail.getImageDigest()
+            + detail.imageDigest()
             + ") has no peer tag matching stable semver "
             + STABLE_SEMVER.pattern()
             + "; peer tags were "
