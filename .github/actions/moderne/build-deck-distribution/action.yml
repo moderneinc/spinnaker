@@ -15,7 +15,7 @@ runs:
     # Set up Java for Gradle
     - uses: actions/setup-java@v5
       with:
-        java-version: 17
+        java-version: 25
         distribution: 'temurin'
         cache: gradle
 
