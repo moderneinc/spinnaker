@@ -724,7 +724,9 @@ class SqlExecutionRepository(
               .statusIn(criteria.statuses)
           },
           seek = {
-            it.orderBy(field("id").desc()).limit(criteria.pageSize)
+            it.orderBy(field("id").desc())
+              .limit(criteria.pageSize)
+              .offset((criteria.page - 1) * criteria.pageSize)
           }
         )
       } else {
@@ -737,7 +739,9 @@ class SqlExecutionRepository(
               .statusIn(criteria.statuses)
           },
           seek = {
-            it.orderBy(field("id").desc()).limit(criteria.pageSize)
+            it.orderBy(field("id").desc())
+              .limit(criteria.pageSize)
+              .offset((criteria.page - 1) * criteria.pageSize)
           }
         )
       }
@@ -965,8 +969,8 @@ class SqlExecutionRepository(
           conditions = {
             var conditions = it.where(
             field("config_id").`in`(*pipelineConfigIds.toTypedArray())
-              .and(field("build_time").gt(buildTimeStartBoundary))
-              .and(field("build_time").lt(buildTimeEndBoundary))
+              .and(field("build_time").ge(buildTimeStartBoundary))
+              .and(field("build_time").le(buildTimeEndBoundary))
             )
 
             if (executionCriteria.statuses.isNotEmpty()) {
@@ -1309,7 +1313,12 @@ class SqlExecutionRepository(
         compressedExecTablePairs = mapOf(
           field("id") to id,
           field("compressed_body") to compressedBody,
-          field("compression_type") to compressionProperties.compressionType.type
+          // Bind as an inlined string literal rather than a typed bind parameter. Postgres can
+          // implicitly cast a string literal to the native compression_type_enum column type,
+          // but rejects an untyped ("unknown") bind parameter with a BadSqlGrammarException
+          // (column "compression_type" is of type compression_type_enum but expression is of
+          // type character varying). MySQL/MariaDB accept the inlined literal identically.
+          field("compression_type") to DSL.inline(compressionProperties.compressionType.type)
         )
         isBodyCompressed = true
       }

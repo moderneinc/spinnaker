@@ -1,101 +1,125 @@
-import { mock } from 'angular';
-import type { ReactWrapper, ShallowWrapper } from 'enzyme';
-import { mount, shallow } from 'enzyme';
+import type { ReactWrapper } from 'enzyme';
+import { mount } from 'enzyme';
 import React from 'react';
+import { act } from 'react-dom/test-utils';
 
-import { Application } from '@spinnaker/core';
-import { REACT_MODULE } from '@spinnaker/core';
+import type { Application, TetheredSelect as TetheredSelectType } from '@spinnaker/core';
+import { TetheredSelect } from '@spinnaker/core';
 
-import type { IAmazonImageSelectorProps, IAmazonImageSelectorState } from './AmazonImageSelectInput';
 import { AmazonImageSelectInput } from './AmazonImageSelectInput';
-// eslint-disable-next-line @spinnaker/import-from-npm-not-relative
-import { mockHttpClient } from '../../../../core/src/api/mock/jasmine';
 import type { IAmazonImage } from '../../image';
-const application = new Application('testapp', null, []);
-const region = 'us-region-1';
-const credentials = 'prodaccount';
-const imageName = 'fancypackage-1.0.0-h005.6c8b5fe-x86_64-20181206030728-xenial-hvm-sriov-ebs';
-const amiId = 'fake-abcd123';
+import { AwsImageReader } from '../../image';
 
-describe('<AmazonImageSelectInput/>', () => {
-  let shallowComponent: ShallowWrapper<IAmazonImageSelectorProps, IAmazonImageSelectorState>;
-  let mountedComponent: ReactWrapper<IAmazonImageSelectorProps, IAmazonImageSelectorState>;
+function makeImage(imageName: string, amiId: string, region = 'us-east-1'): IAmazonImage {
+  return {
+    imageName,
+    amis: { [region]: [amiId] },
+    attributes: { virtualizationType: 'hvm', architecture: 'x86_64', creationDate: '2024-01-01T00:00:00.000Z' },
+  } as IAmazonImage;
+}
 
-  beforeEach(mock.module(REACT_MODULE));
-  beforeEach(mock.inject());
+describe('AmazonImageSelectInput', () => {
+  const application = ({ name: 'app' } as unknown) as Application;
+  const image1 = makeImage('app-package-1.0', 'ami-111');
+  const image2 = makeImage('app-package-2.0', 'ami-222');
 
-  afterEach(() => {
-    shallowComponent && shallowComponent.unmount();
-    mountedComponent && mountedComponent.unmount();
+  beforeEach(() => {
+    spyOn(AwsImageReader.prototype, 'findImages').and.returnValue(Promise.resolve([image1, image2]));
+    spyOn(AwsImageReader.prototype, 'getImage').and.returnValue(Promise.resolve(null));
   });
 
-  const baseProps = {
-    application,
-    credentials,
-    region,
-    value: {} as IAmazonImage,
-    onChange: () => null as any,
-  };
-
-  describe('fetches package images when mounted', () => {
-    it('using application name when no amiId is present in the initial value', async () => {
-      const http = mockHttpClient();
-      http.expectGET(`/images/find?q=testapp*`).respond(200, []);
-      shallowComponent = shallow(<AmazonImageSelectInput {...baseProps} />);
-      await http.flush();
+  async function settle(component: ReactWrapper): Promise<void> {
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
     });
+    component.update();
+  }
 
-    it('and updates isLoadingPackageImages', async () => {
-      const http = mockHttpClient();
-      http.expectGET(`/images/find?q=testapp*`).respond(200, []);
-      shallowComponent = shallow(<AmazonImageSelectInput {...baseProps} />);
-      expect(shallowComponent.state().isLoadingPackageImages).toBe(true);
-      await http.flush();
-      expect(shallowComponent.state().isLoadingPackageImages).toBe(false);
-    });
+  // The package-images dropdown's menu is only rendered by the underlying react-select
+  // instance once it's open, which normally happens via a real focus/mousedown DOM event.
+  // Driving the TetheredSelect instance directly is more reliable than simulating focus in a
+  // detached test DOM, and it's how a user's click on the control ultimately manifests anyway.
+  function openMenu(component: ReactWrapper): void {
+    (component.find(TetheredSelect).instance() as TetheredSelectType).setState({ isOpen: true });
+    component.update();
+  }
 
-    it('using fetching image by amiId and looking up via the imageName', async () => {
-      const http = mockHttpClient();
-      const value = AmazonImageSelectInput.makeFakeImage(imageName, amiId, region);
-      http.expectGET(`/images/${credentials}/${region}/${amiId}?provider=aws`).respond(200, [value]);
-      http.expectGET(`/images/find?q=fancypackage-*`).respond(200, []);
-      shallowComponent = shallow(<AmazonImageSelectInput {...baseProps} value={value} />);
-      await http.flush();
-    });
+  function mountInput(onChange: (image: IAmazonImage) => void, value: IAmazonImage = null) {
+    return mount(
+      <AmazonImageSelectInput
+        onChange={onChange}
+        value={value}
+        application={application}
+        credentials="test"
+        region="us-east-1"
+      />,
+    );
+  }
 
-    it('using application name when an amiId is present in the initial value, but the image was not found', async () => {
-      const http = mockHttpClient();
-      const value = AmazonImageSelectInput.makeFakeImage(imageName, amiId, region);
-      http.expectGET(`/images/${credentials}/${region}/${amiId}?provider=aws`).respond(200, null);
-      http.expectGET(`/images/find?q=${application.name}*`).respond(200, []);
-      shallowComponent = shallow(<AmazonImageSelectInput {...baseProps} value={value} />);
-      await http.flush();
-    });
+  it('renders a single options menu wrapper, not a nested duplicate', async () => {
+    const component = mountInput(jasmine.createSpy('onChange'));
+    await settle(component);
+    openMenu(component);
+
+    // Regression test: buildImageMenu used to re-wrap its options in a second
+    // ".Select-menu-outer > .Select-menu" pair on top of react-select's own wrapper. The inner
+    // duplicate kept its default `position: absolute` styling instead of the `position: static`
+    // override TetheredSelect applies to the outermost wrapper, which broke the sizing/hit-testing
+    // of the real, Tether-positioned menu: the list was visible but clicks landed on nothing.
+    expect(component.find('.Select-menu-outer').length).toBe(1);
   });
 
-  it('calls onChange with the backend image when the package images are loaded', async () => {
-    const http = mockHttpClient();
-    const value = AmazonImageSelectInput.makeFakeImage(imageName, amiId, region);
-    const backendValue = AmazonImageSelectInput.makeFakeImage(imageName, amiId, region);
+  it('selects the clicked image from the package images dropdown', async () => {
     const onChange = jasmine.createSpy('onChange');
-    http.expectGET(`/images/${credentials}/${region}/${amiId}?provider=aws`).respond(200, [backendValue]);
-    http.expectGET(`/images/find?q=fancypackage-*`).respond(200, [backendValue]);
-    mountedComponent = mount(<AmazonImageSelectInput {...baseProps} onChange={onChange} value={value} />);
-    await http.flush();
+    const component = mountInput(onChange);
+    await settle(component);
+    openMenu(component);
 
-    expect(onChange).toHaveBeenCalledWith(backendValue);
+    const options = component.find('.Select-option');
+    expect(options.length).toBe(2);
+    options.first().simulate('mousedown');
+
+    expect(onChange).toHaveBeenCalledWith(jasmine.objectContaining({ imageName: image1.imageName }));
   });
 
-  it('calls onChange with null image when the image is not found in the package images', async () => {
-    const http = mockHttpClient();
-    const value = AmazonImageSelectInput.makeFakeImage(imageName, amiId, region);
-    const noResults = [] as IAmazonImage[];
-    http.expectGET(`/images/${credentials}/${region}/${amiId}?provider=aws`).respond(200, noResults);
-    http.expectGET(`/images/find?q=testapp*`).respond(200, noResults);
-    const onChange = jasmine.createSpy('onChange');
-    mountedComponent = mount(<AmazonImageSelectInput {...baseProps} onChange={onChange} value={value} />);
-    await http.flush();
+  it('provides a way back from "Search All Images" to the package images dropdown', async () => {
+    const component = mountInput(jasmine.createSpy('onChange'));
+    await settle(component);
 
-    expect(onChange).toHaveBeenCalledWith(undefined);
+    expect(component.text()).toContain('Pick an image');
+
+    component.find('button.link').simulate('click');
+    component.update();
+    expect(component.text()).toContain('Search for an image');
+
+    // Regression test: there used to be no control to switch back out of search-all-images mode.
+    const backButton = component.find('button.link');
+    expect(backButton.text()).toContain('Back to Package Images');
+    backButton.simulate('click');
+    component.update();
+
+    expect(component.text()).toContain('Pick an image');
+  });
+
+  it('selects the clicked image while searching all images', async () => {
+    const onChange = jasmine.createSpy('onChange');
+    const component = mountInput(onChange);
+    await settle(component);
+
+    component.find('button.link').simulate('click');
+    component.update();
+
+    // Populate search results directly, bypassing the debounced RxJS search pipeline, which is
+    // not what this test is exercising.
+    (component.instance() as AmazonImageSelectInput).setState({ searchString: 'app', searchResults: [image2] });
+    component.update();
+    openMenu(component);
+
+    const options = component.find('.Select-option');
+    expect(options.length).toBe(1);
+    options.first().simulate('mousedown');
+
+    expect(onChange).toHaveBeenCalledWith(jasmine.objectContaining({ imageName: image2.imageName }));
   });
 });

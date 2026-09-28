@@ -1,7 +1,7 @@
 /*
  * Copyright 2018 Amazon.com, Inc. or its affiliates.
  *
- * Licensed under the Apache License, Version 2.0 (the "License")
+ * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
@@ -16,48 +16,57 @@
 
 package com.netflix.spinnaker.clouddriver.lambda.deploy.ops;
 
-import com.amazonaws.services.elasticloadbalancingv2.AmazonElasticLoadBalancing;
-import com.amazonaws.services.elasticloadbalancingv2.model.DescribeTargetGroupsRequest;
-import com.amazonaws.services.elasticloadbalancingv2.model.DescribeTargetGroupsResult;
-import com.amazonaws.services.elasticloadbalancingv2.model.RegisterTargetsRequest;
-import com.amazonaws.services.elasticloadbalancingv2.model.RegisterTargetsResult;
-import com.amazonaws.services.elasticloadbalancingv2.model.TargetDescription;
-import com.amazonaws.services.elasticloadbalancingv2.model.TargetGroup;
-import com.amazonaws.services.lambda.AWSLambda;
-import com.amazonaws.services.lambda.model.AddPermissionRequest;
-import com.amazonaws.services.lambda.model.CreateFunctionRequest;
-import com.amazonaws.services.lambda.model.CreateFunctionResult;
-import com.amazonaws.services.lambda.model.Environment;
-import com.amazonaws.services.lambda.model.FunctionCode;
-import com.amazonaws.services.lambda.model.VpcConfig;
 import com.netflix.frigga.Names;
 import com.netflix.spinnaker.clouddriver.lambda.deploy.description.CreateLambdaFunctionDescription;
+import com.netflix.spinnaker.clouddriver.lambda.names.LambdaTagNamer;
 import com.netflix.spinnaker.clouddriver.orchestration.AtomicOperation;
+import com.netflix.spinnaker.config.LambdaConfiguration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.UUID;
+import software.amazon.awssdk.services.elasticloadbalancingv2.ElasticLoadBalancingV2Client;
+import software.amazon.awssdk.services.elasticloadbalancingv2.model.DescribeTargetGroupsRequest;
+import software.amazon.awssdk.services.elasticloadbalancingv2.model.DescribeTargetGroupsResponse;
+import software.amazon.awssdk.services.elasticloadbalancingv2.model.RegisterTargetsRequest;
+import software.amazon.awssdk.services.elasticloadbalancingv2.model.RegisterTargetsResponse;
+import software.amazon.awssdk.services.elasticloadbalancingv2.model.TargetDescription;
+import software.amazon.awssdk.services.elasticloadbalancingv2.model.TargetGroup;
+import software.amazon.awssdk.services.lambda.LambdaClient;
+import software.amazon.awssdk.services.lambda.model.AddPermissionRequest;
+import software.amazon.awssdk.services.lambda.model.CreateFunctionRequest;
+import software.amazon.awssdk.services.lambda.model.CreateFunctionResponse;
+import software.amazon.awssdk.services.lambda.model.Environment;
+import software.amazon.awssdk.services.lambda.model.FunctionCode;
+import software.amazon.awssdk.services.lambda.model.VpcConfig;
 
 public class CreateLambdaAtomicOperation
-    extends AbstractLambdaAtomicOperation<CreateLambdaFunctionDescription, CreateFunctionResult>
-    implements AtomicOperation<CreateFunctionResult> {
+    extends AbstractLambdaAtomicOperation<CreateLambdaFunctionDescription, CreateFunctionResponse>
+    implements AtomicOperation<CreateFunctionResponse> {
 
-  public CreateLambdaAtomicOperation(CreateLambdaFunctionDescription description) {
+  private final LambdaConfiguration config;
+
+  public CreateLambdaAtomicOperation(
+      CreateLambdaFunctionDescription description, LambdaConfiguration config) {
     super(description, "CREATE_LAMBDA_FUNCTION");
+    this.config = config;
   }
 
   @Override
-  public CreateFunctionResult operate(List priorOutputs) {
+  public CreateFunctionResponse operate(List priorOutputs) {
     updateTaskStatus("Initializing Creation of AWS Lambda Function Operation...");
     return createFunction();
   }
 
-  private CreateFunctionResult createFunction() {
+  private CreateFunctionResponse createFunction() {
     FunctionCode code =
-        new FunctionCode()
-            .withS3Bucket(description.getProperty("s3bucket").toString())
-            .withS3Key(description.getProperty("s3key").toString());
+        FunctionCode.builder()
+            .s3Bucket(description.getS3bucket())
+            .s3Key(description.getS3key())
+            .build();
+
+    LambdaTagNamer.applyIfNeeded(description, description.getAppName(), config.isSetMonikerTags());
 
     Map<String, String> objTag = new HashMap<>();
     if (null != description.getTags()) {
@@ -67,48 +76,52 @@ public class CreateLambdaAtomicOperation
       }
     }
 
-    AWSLambda client = getLambdaClient();
+    LambdaClient client = getLambdaClient();
 
-    CreateFunctionRequest request = new CreateFunctionRequest();
-    request.setFunctionName(
-        combineAppDetail(description.getAppName(), description.getFunctionName()));
-    request.setDescription(description.getDescription());
-    request.setHandler(description.getHandler());
-    request.setMemorySize(description.getMemorySize());
-    request.setPublish(description.getPublish());
-    request.setRole(description.getRole());
-    request.setRuntime(description.getRuntime());
-    request.setTimeout(description.getTimeout());
-    request.setLayers(description.getLayers());
-
-    request.setCode(code);
-    request.setTags(objTag);
+    CreateFunctionRequest.Builder requestBuilder =
+        CreateFunctionRequest.builder()
+            .functionName(combineAppDetail(description.getAppName(), description.getFunctionName()))
+            .description(description.getDescription())
+            .handler(description.getHandler())
+            .memorySize(description.getMemorySize())
+            .publish(description.getPublish())
+            .role(description.getRole())
+            .runtime(description.getRuntime())
+            .timeout(description.getTimeout())
+            .layers(description.getLayers())
+            .code(code)
+            .tags(objTag);
 
     Map<String, String> envVariables = description.getEnvVariables();
     if (null != envVariables) {
-      request.setEnvironment(new Environment().withVariables(envVariables));
+      requestBuilder.environment(Environment.builder().variables(envVariables).build());
     }
 
     if (null != description.getSecurityGroupIds() || null != description.getSubnetIds()) {
-      request.setVpcConfig(
-          new VpcConfig()
-              .withSecurityGroupIds(description.getSecurityGroupIds())
-              .withSubnetIds(description.getSubnetIds()));
+      requestBuilder.vpcConfig(
+          VpcConfig.builder()
+              .securityGroupIds(description.getSecurityGroupIds())
+              .subnetIds(description.getSubnetIds())
+              .build());
     }
-    if (!description.getDeadLetterConfig().getTargetArn().isEmpty()) {
-      request.setDeadLetterConfig(description.getDeadLetterConfig());
+    if (description.getDeadLetterConfig() != null
+        && description.getDeadLetterConfig().targetArn() != null
+        && !description.getDeadLetterConfig().targetArn().isEmpty()) {
+      requestBuilder.deadLetterConfig(description.getDeadLetterConfig());
     }
-    request.setKMSKeyArn(description.getKmskeyArn());
-    request.setTracingConfig(description.getTracingConfig());
+    requestBuilder.kmsKeyArn(description.getKmskeyArn());
+    if (description.getTracingConfig() != null && description.getTracingConfig().mode() != null) {
+      requestBuilder.tracingConfig(description.getTracingConfig());
+    }
 
-    CreateFunctionResult result = client.createFunction(request);
+    CreateFunctionResponse result = client.createFunction(requestBuilder.build());
     updateTaskStatus("Finished Creation of AWS Lambda Function Operation...");
     if (description.getTargetGroups() != null && !description.getTargetGroups().isEmpty()) {
 
       updateTaskStatus(
           String.format(
               "Started registering lambda to targetGroup (%s)", description.getTargetGroups()));
-      String functionArn = result.getFunctionArn();
+      String functionArn = result.functionArn();
       registerTargetGroup(functionArn, client);
     }
 
@@ -116,6 +129,9 @@ public class CreateLambdaAtomicOperation
   }
 
   protected String combineAppDetail(String appName, String functionName) {
+    if (!config.isPrefixApplicationNameToFunction()) {
+      return functionName;
+    }
     Names functionAppName = Names.parseName(functionName);
     if (null != functionAppName) {
       return functionAppName.getApp().equals(appName)
@@ -127,49 +143,52 @@ public class CreateLambdaAtomicOperation
     }
   }
 
-  private RegisterTargetsResult registerTargetGroup(String functionArn, AWSLambda lambdaClient) {
+  private RegisterTargetsResponse registerTargetGroup(
+      String functionArn, LambdaClient lambdaClient) {
 
-    AmazonElasticLoadBalancing loadBalancingV2 = getAmazonElasticLoadBalancingClient();
+    ElasticLoadBalancingV2Client loadBalancingV2 = getAmazonElasticLoadBalancingClient();
     TargetGroup targetGroup = retrieveTargetGroup(loadBalancingV2);
 
     AddPermissionRequest addPermissionRequest =
-        new AddPermissionRequest()
-            .withFunctionName(functionArn)
-            .withAction("lambda:InvokeFunction")
-            .withSourceArn(targetGroup.getTargetGroupArn())
-            .withPrincipal("elasticloadbalancing.amazonaws.com")
-            .withStatementId(UUID.randomUUID().toString());
+        AddPermissionRequest.builder()
+            .functionName(functionArn)
+            .action("lambda:InvokeFunction")
+            .sourceArn(targetGroup.targetGroupArn())
+            .principal("elasticloadbalancing.amazonaws.com")
+            .statementId(UUID.randomUUID().toString())
+            .build();
 
     lambdaClient.addPermission(addPermissionRequest);
 
     updateTaskStatus(
         String.format(
             "Lambda (%s) invoke permissions added to Target group (%s).",
-            functionArn, targetGroup.getTargetGroupArn()));
+            functionArn, targetGroup.targetGroupArn()));
 
-    RegisterTargetsResult result =
+    RegisterTargetsResponse result =
         loadBalancingV2.registerTargets(
-            new RegisterTargetsRequest()
-                .withTargets(new TargetDescription().withId(functionArn))
-                .withTargetGroupArn(targetGroup.getTargetGroupArn()));
+            RegisterTargetsRequest.builder()
+                .targetGroupArn(targetGroup.targetGroupArn())
+                .targets(TargetDescription.builder().id(functionArn).build())
+                .build());
 
     updateTaskStatus(
         String.format(
             "Registered the Lambda (%s) with Target group (%s).",
-            functionArn, targetGroup.getTargetGroupArn()));
+            functionArn, targetGroup.targetGroupArn()));
     return result;
   }
 
-  private TargetGroup retrieveTargetGroup(AmazonElasticLoadBalancing loadBalancingV2) {
+  private TargetGroup retrieveTargetGroup(ElasticLoadBalancingV2Client loadBalancingV2) {
 
     DescribeTargetGroupsRequest request =
-        new DescribeTargetGroupsRequest().withNames(description.getTargetGroups());
-    DescribeTargetGroupsResult describeTargetGroupsResult =
+        DescribeTargetGroupsRequest.builder().names(description.getTargetGroups()).build();
+    DescribeTargetGroupsResponse describeTargetGroupsResult =
         loadBalancingV2.describeTargetGroups(request);
 
-    if (describeTargetGroupsResult.getTargetGroups().size() == 1) {
-      return describeTargetGroupsResult.getTargetGroups().get(0);
-    } else if (describeTargetGroupsResult.getTargetGroups().size() > 1) {
+    if (describeTargetGroupsResult.targetGroups().size() == 1) {
+      return describeTargetGroupsResult.targetGroups().get(0);
+    } else if (describeTargetGroupsResult.targetGroups().size() > 1) {
       throw new IllegalArgumentException(
           "There are multiple target groups with the name " + description.getTargetGroups() + ".");
     } else {
@@ -178,9 +197,9 @@ public class CreateLambdaAtomicOperation
     }
   }
 
-  private AmazonElasticLoadBalancing getAmazonElasticLoadBalancingClient() {
+  private ElasticLoadBalancingV2Client getAmazonElasticLoadBalancingClient() {
 
     return getAmazonClientProvider()
-        .getAmazonElasticLoadBalancingV2(description.getCredentials(), getRegion(), false);
+        .getElasticLoadBalancingV2Client(description.getCredentials(), getRegion());
   }
 }

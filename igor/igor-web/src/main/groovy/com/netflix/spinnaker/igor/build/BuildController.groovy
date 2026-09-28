@@ -30,6 +30,7 @@ import com.netflix.spinnaker.igor.service.ArtifactDecorator
 import com.netflix.spinnaker.igor.service.BuildOperations
 import com.netflix.spinnaker.igor.service.BuildProperties
 import com.netflix.spinnaker.igor.service.BuildServices
+import com.netflix.spinnaker.igor.service.StoppableBuildService
 import com.netflix.spinnaker.kork.artifacts.model.Artifact
 import com.netflix.spinnaker.kork.retrofit.exceptions.SpinnakerHttpException
 import com.netflix.spinnaker.kork.web.exceptions.InvalidRequestException
@@ -154,7 +155,7 @@ class BuildController {
     return buildService.queuedBuild(master, item)
   }
 
-  @RequestMapping(value = '/builds/all/{master:.+}/**')
+  @RequestMapping(value = ['/builds/all/{master:.+}/**', '/builds/all/{master:.+}'])
   @PreAuthorize("hasPermission(#master, 'BUILD_SERVICE', 'READ')")
   List<Object> getBuilds(@PathVariable String master, HttpServletRequest request) {
     def job = ((String) request.getAttribute(
@@ -174,7 +175,7 @@ class BuildController {
     "true"
   }
 
-  @RequestMapping(value = "/masters/{master}/jobs/stop/{queuedBuild}/{buildNumber}", method = RequestMethod.PUT)
+  @RequestMapping(value = "/masters/{master:.+}/jobs/stop/{queuedBuild}/{buildNumber}", method = RequestMethod.PUT)
   @PreAuthorize("hasPermission(#master, 'BUILD_SERVICE', 'WRITE')")
   String stopWithQueryParam(
     @PathVariable String master,
@@ -189,28 +190,28 @@ class BuildController {
 
   void stopJob(String master, long buildNumber, String jobName, String queuedBuild) {
     def buildService = getBuildService(master)
-    if (buildService instanceof JenkinsService) {
+    if (buildService instanceof StoppableBuildService) {
+      StoppableBuildService stoppable = (StoppableBuildService) buildService
       // Jobs that haven't been started yet won't have a buildNumber
       // (They're still in the queue). We use 0 to denote that case
-      if (buildNumber != 0 &&
-        buildService.metaClass.respondsTo(buildService, 'stopRunningBuild')) {
-        buildService.stopRunningBuild(jobName, buildNumber)
+      if (buildNumber != 0) {
+        stoppable.stopRunningBuild(jobName, buildNumber)
       } else {
-        // The jenkins api for removing a job from the queue (http://<Jenkins_URL>/queue/cancelItem?id=<queuedBuild>)
-        // always returns a 404. This try catch block insures that the exception is eaten instead
-        // of being handled by the handleOtherException handler and returning a 500 to orca
+        // Some CI providers (e.g., Jenkins) return a 404 when cancelling a queued build.
+        // We catch that to avoid returning a 500 to Orca.
         try {
-          if (buildService.metaClass.respondsTo(buildService, 'stopQueuedBuild')) {
-            buildService.stopQueuedBuild(queuedBuild)
-          }
+          stoppable.stopQueuedBuild(queuedBuild)
         } catch (SpinnakerHttpException e) {
           if (e.getResponseCode() != NOT_FOUND.value()) {
             throw e
           }
+        } catch (UnsupportedOperationException e) {
+          log.debug("Queued build stop not supported for master '{}', ignoring", master)
         }
       }
+    } else {
+      throw new InvalidRequestException("Build service '${master}' does not support stopping builds")
     }
-
   }
 
   @RequestMapping(value = "/masters/{name}/jobs/**/update/{buildNumber}", method = RequestMethod.PATCH)

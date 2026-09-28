@@ -19,7 +19,7 @@ export interface IReactSelectInputProps<T = OptionValues>
 }
 
 // TODO: use standard css classes (from style guide?)
-// Currently the form-control class is needed for ng-invalid, but messes up the rendering of react-select
+// Currently the form-control class is needed for invalid styles, but messes up the rendering of react-select
 export const reactSelectValidationErrorStyle = {
   borderColor: 'var(--color-danger)',
   WebkitBoxShadow: 'inset 0 1px 1px rgba(0, 0, 0, 0.075)',
@@ -89,7 +89,7 @@ export function ReactSelectInput<T = string>(props: IReactSelectInputProps<T>) {
 
   const commonProps = { className, style, ignoreAccents, ...fieldProps, ...otherProps } as any;
 
-  const SelectElement = ({ options }: { options: any[] }) =>
+  const renderSelectElement = (options: ReactSelectProps<any>['options']) =>
     mode === 'TETHERED' ? (
       <TetheredSelect {...commonProps} options={options} />
     ) : mode === 'VIRTUALIZED' ? (
@@ -101,11 +101,9 @@ export function ReactSelectInput<T = string>(props: IReactSelectInputProps<T>) {
     );
 
   if (isStringArray(stringOptions)) {
-    return (
-      <StringsAsOptions strings={stringOptions}>{(options) => <SelectElement options={options} />}</StringsAsOptions>
-    );
+    return <StringsAsOptions strings={stringOptions}>{(options) => renderSelectElement(options)}</StringsAsOptions>;
   } else {
-    return <SelectElement options={optionOptions} />;
+    return renderSelectElement(optionOptions);
   }
 }
 
@@ -114,7 +112,8 @@ function CreatableSelect(props: IReactSelectInputProps<any>) {
   const options = React.useMemo(() => {
     const options = props.options ?? [];
     const optionsValues = options.map((o) => o.value);
-    const createdOptions = ((props.value as string[]) ?? [])
+    const currentValues = Array.isArray(props.value) ? props.value : props.value ? [props.value] : [];
+    const createdOptions = currentValues
       .filter((val) => !optionsValues.includes(val))
       .map((opt) => ({ label: opt, value: opt }));
     return options.concat(createdOptions);

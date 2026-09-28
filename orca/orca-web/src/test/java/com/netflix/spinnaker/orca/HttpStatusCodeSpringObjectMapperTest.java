@@ -30,8 +30,8 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest(classes = Main.class)
 @TestPropertySource(
@@ -43,15 +43,16 @@ class HttpStatusCodeSpringObjectMapperTest {
 
   @Autowired ObjectMapper objectMapper;
 
-  @MockBean ExecutionRepository executionRepository;
+  @MockitoBean ExecutionRepository executionRepository;
 
-  @MockBean PendingExecutionService pendingExecutionService;
+  @MockitoBean PendingExecutionService pendingExecutionService;
 
-  @MockBean NotificationClusterLock notificationClusterLock;
+  @MockitoBean NotificationClusterLock notificationClusterLock;
 
   @Test
   void shouldFailToDeserializeInvalidStringStatusCode() {
-    String json = """
+    String json =
+        """
       {
         "statusCode": "InvalidStatusCode"
       }
@@ -64,7 +65,8 @@ class HttpStatusCodeSpringObjectMapperTest {
 
   @Test
   void shouldFailToDeserializeInvalidIntStatusCode() {
-    String json = """
+    String json =
+        """
       {
         "statusCode": 20
       }
@@ -77,7 +79,8 @@ class HttpStatusCodeSpringObjectMapperTest {
 
   @Test
   void shouldDeserializeStringStatusCode() throws JsonProcessingException {
-    String json = """
+    String json =
+        """
       {
         "statusCode": "OK"
       }
@@ -90,7 +93,8 @@ class HttpStatusCodeSpringObjectMapperTest {
 
   @Test
   void shouldDeserializeIntStatusCode() throws JsonProcessingException {
-    String json = """
+    String json =
+        """
       {
         "statusCode": 200
       }

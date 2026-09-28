@@ -20,6 +20,8 @@ import com.google.common.base.Strings;
 import com.netflix.spinnaker.clouddriver.artifacts.config.ArtifactAccount;
 import com.netflix.spinnaker.clouddriver.artifacts.config.TokenAuth;
 import com.netflix.spinnaker.kork.annotations.NonnullByDefault;
+import com.netflix.spinnaker.kork.github.GitHubAppCredentials;
+import java.util.List;
 import java.util.Optional;
 import javax.annotation.ParametersAreNullableByDefault;
 import lombok.Builder;
@@ -39,6 +41,42 @@ public class GitRepoArtifactAccount implements ArtifactAccount, TokenAuth {
   private final String sshPrivateKeyPassphraseCmd;
   private final String sshKnownHostsFilePath;
   private final boolean sshTrustUnknownHosts;
+  private final List<String> allowedHosts;
+  /*
+   GitHub App authentication. When present, takes precedence over the other auth methods.
+   Only works with http(s) clone URLs.
+  */
+  private final Optional<GitHubAppCredentials> githubApp;
+
+  // Kept for source compatibility; delegates to the full constructor below. Only the full
+  // constructor carries @Builder: with two @Builder constructors lombok merges the builder fields
+  // but build() silently drops fields missing from the first constructor.
+  @ParametersAreNullableByDefault
+  public GitRepoArtifactAccount(
+      String name,
+      String username,
+      String password,
+      String token,
+      String tokenFile,
+      String sshPrivateKeyFilePath,
+      String sshPrivateKeyPassphrase,
+      String sshPrivateKeyPassphraseCmd,
+      String sshKnownHostsFilePath,
+      boolean sshTrustUnknownHosts) {
+    this(
+        name,
+        username,
+        password,
+        token,
+        tokenFile,
+        sshPrivateKeyFilePath,
+        sshPrivateKeyPassphrase,
+        sshPrivateKeyPassphraseCmd,
+        sshKnownHostsFilePath,
+        sshTrustUnknownHosts,
+        List.of(),
+        null);
+  }
 
   @Builder
   @ConstructorBinding
@@ -53,7 +91,9 @@ public class GitRepoArtifactAccount implements ArtifactAccount, TokenAuth {
       String sshPrivateKeyPassphrase,
       String sshPrivateKeyPassphraseCmd,
       String sshKnownHostsFilePath,
-      boolean sshTrustUnknownHosts) {
+      boolean sshTrustUnknownHosts,
+      List<String> allowedHosts,
+      GitHubAppCredentials githubApp) {
     this.name = Strings.nullToEmpty(name);
     this.username = Strings.nullToEmpty(username);
     this.password = Strings.nullToEmpty(password);
@@ -64,5 +104,7 @@ public class GitRepoArtifactAccount implements ArtifactAccount, TokenAuth {
     this.sshPrivateKeyPassphraseCmd = Strings.nullToEmpty(sshPrivateKeyPassphraseCmd);
     this.sshKnownHostsFilePath = Strings.nullToEmpty(sshKnownHostsFilePath);
     this.sshTrustUnknownHosts = sshTrustUnknownHosts;
+    this.allowedHosts = allowedHosts;
+    this.githubApp = Optional.ofNullable(githubApp);
   }
 }

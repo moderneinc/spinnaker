@@ -16,26 +16,26 @@
 
 package com.netflix.spinnaker.clouddriver.aws.security;
 
-import com.amazonaws.auth.AWSCredentialsProvider;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.netflix.spinnaker.clouddriver.aws.AwsConfigurationProperties;
 import com.netflix.spinnaker.fiat.model.resources.Permissions;
 import java.util.List;
 import java.util.Objects;
 import lombok.Getter;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 
 /**
  * Provides an Amazon credential pack that uses Assume Role
  * (http://docs.aws.amazon.com/IAM/latest/UserGuide/roles-assume-role.html) to provide API access to
  * the account. This class allows you to use your credentials, provided via the supplied {@link
- * com.amazonaws.auth.AWSCredentialsProvider} to act-as the target account ID with the privileges
- * desribed through the <b>assumeRole</b> role
+ * AwsCredentialsProvider} to act-as the target account ID with the privileges desribed through the
+ * <b>assumeRole</b> role
  */
 public class AssumeRoleAmazonCredentials extends AmazonCredentials {
   static final String DEFAULT_SESSION_NAME = "Spinnaker";
 
-  static AWSCredentialsProvider createSTSCredentialsProvider(
-      AWSCredentialsProvider credentialsProvider,
+  static AwsCredentialsProvider createSTSCredentialsProvider(
+      AwsCredentialsProvider credentialsProvider,
       String accountId,
       String assumeRole,
       String sessionName,
@@ -58,14 +58,13 @@ public class AssumeRoleAmazonCredentials extends AmazonCredentials {
     }
     return credentialsProvider == null
         ? null
-        : new NetflixSTSAssumeRoleSessionCredentialsProvider(
+        : new SpinnakerStsAssumeRoleCredentialsProviderV2(
             credentialsProvider,
+            accountId,
             assumeRoleValue,
             Objects.requireNonNull(sessionName, "sessionName"),
             sessionDurationSeconds,
-            accountId,
-            externalId,
-            awsConfigurationProperties);
+            externalId);
   }
 
   /** The role to assume on the target account. */
@@ -128,7 +127,7 @@ public class AssumeRoleAmazonCredentials extends AmazonCredentials {
    */
   public AssumeRoleAmazonCredentials(
       AssumeRoleAmazonCredentials copy,
-      AWSCredentialsProvider credentialsProvider,
+      AwsCredentialsProvider credentialsProvider,
       AwsConfigurationProperties awsConfigurationProperties) {
     this(
         copy.getName(),
@@ -164,7 +163,7 @@ public class AssumeRoleAmazonCredentials extends AmazonCredentials {
       Permissions permissions,
       List<LifecycleHook> lifecycleHooks,
       boolean allowPrivateThirdPartyImages,
-      AWSCredentialsProvider credentialsProvider,
+      AwsCredentialsProvider credentialsProvider,
       String assumeRole,
       String sessionName,
       Integer sessionDurationSeconds,

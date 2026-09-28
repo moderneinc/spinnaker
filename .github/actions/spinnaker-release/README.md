@@ -14,12 +14,18 @@ Local: Run `./local-action.sh` with prepended environment variables to supply in
 
 # Sample
 
+Alongside the BoM, changelog, and `versions.yml`, this action can also publish the Gate OpenAPI
+spec to `spinnaker.io`'s `static/docs/reference/api/swagger.json` (see `publish-api-docs` and
+`swagger-json-path`), which powers https://spinnaker.io/docs/reference/api/docs. The spec itself
+must already exist on disk before invoking this action - e.g. by running
+`./gradlew :gate:swagger` against the release commit first.
+
 This is a sample Spinnaker BoM from release `1.31.2`:
 
 ```yaml
 artifactSources:
   debianRepository: https://us-apt.pkg.dev/projects/spinnaker-community
-  dockerRegistry: us-docker.pkg.dev/spinnaker-community/docker
+  dockerRegistry: ghcr.io/spinnaker
   gitPrefix: https://github.com/spinnaker
   googleImageProject: marketplace-spinnaker-release
 dependencies:

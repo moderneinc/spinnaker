@@ -1,8 +1,15 @@
 import React from 'react';
 import { Modal } from 'react-bootstrap';
 
-import type { Application, IServerGroup } from '@spinnaker/core';
-import { noop, ReactInjector, ReactModal, TaskMonitor, TaskMonitorWrapper } from '@spinnaker/core';
+import type { Application, DeckRuntimeServices, IServerGroup } from '@spinnaker/core';
+import {
+  confirmNotManaged,
+  DeckRuntimeContext,
+  noop,
+  ReactModal,
+  TaskMonitor,
+  TaskMonitorWrapper,
+} from '@spinnaker/core';
 
 export interface IAzureResizeServerGroupModalProps {
   application: Application;
@@ -14,33 +21,41 @@ export interface IAzureResizeServerGroupModalProps {
 export interface IAzureResizeServerGroupModalState {
   targetSize: number;
   taskMonitor: TaskMonitor;
-  submitting: boolean;
+}
+
+function toCount(value: number | string | undefined): number {
+  return typeof value === 'number' ? value : parseInt(value as string, 10) || 0;
 }
 
 export class AzureResizeServerGroupModal extends React.Component<
   IAzureResizeServerGroupModalProps,
   IAzureResizeServerGroupModalState
 > {
+  public static contextType = DeckRuntimeContext;
+  public declare context: React.ContextType<typeof DeckRuntimeContext>;
+
   public static defaultProps: Partial<IAzureResizeServerGroupModalProps> = {
     closeModal: noop,
     dismissModal: noop,
   };
 
-  public static show(props: IAzureResizeServerGroupModalProps): Promise<void> {
-    return ReactModal.show(AzureResizeServerGroupModal, props);
+  public static show(props: IAzureResizeServerGroupModalProps, runtimeServices: DeckRuntimeServices) {
+    const { serverGroup, application } = props;
+    return confirmNotManaged(serverGroup, application).then((notManaged) => {
+      notManaged && ReactModal.show(AzureResizeServerGroupModal, props, {}, runtimeServices);
+    });
   }
 
   constructor(props: IAzureResizeServerGroupModalProps) {
     super(props);
-    const currentSize = props.serverGroup.capacity?.desired;
     this.state = {
-      targetSize: typeof currentSize === 'number' ? currentSize : parseInt(currentSize as string, 10) || 0,
+      targetSize: toCount(props.serverGroup.capacity?.desired),
       taskMonitor: new TaskMonitor({
         application: props.application,
         title: `Resizing ${props.serverGroup.name}`,
-        modalInstance: TaskMonitor.modalInstanceEmulation(() => this.props.dismissModal()),
+        onDismiss: () => this.props.dismissModal(),
+        onTaskComplete: () => this.props.application.serverGroups.refresh(),
       }),
-      submitting: true,
     };
   }
 
@@ -50,21 +65,17 @@ export class AzureResizeServerGroupModal extends React.Component<
 
   private submit = () => {
     const { serverGroup, application } = this.props;
-    const { targetSize, taskMonitor } = this.state;
+    const { targetSize } = this.state;
 
+    // A scale set has a single capacity; send min/max/desired together so the
+    // operation cannot leave the bounds disagreeing with the desired count.
     const command = {
-      targetSize: targetSize,
-      capacity: {
-        min: targetSize,
-        max: targetSize,
-        desired: targetSize,
-      },
+      targetSize,
+      capacity: { min: targetSize, max: targetSize, desired: targetSize },
     };
 
-    this.setState({ submitting: false });
-
-    taskMonitor.submit(() => {
-      return ReactInjector.serverGroupWriter.resizeServerGroup(serverGroup, application, command);
+    this.state.taskMonitor.submit(() => {
+      return this.context.services.serverGroupWriter.resizeServerGroup(serverGroup, application, command);
     });
   };
 
@@ -74,53 +85,48 @@ export class AzureResizeServerGroupModal extends React.Component<
 
   public render() {
     const { serverGroup } = this.props;
-    const { targetSize, submitting, taskMonitor } = this.state;
-    const desired = serverGroup.capacity?.desired;
-    const currentSize = typeof desired === 'number' ? desired : parseInt(desired as string, 10) || 0;
+    const { targetSize, taskMonitor } = this.state;
+    const currentSize = toCount(serverGroup.capacity?.desired);
 
     return (
       <Modal show={true} onHide={this.cancel}>
         <TaskMonitorWrapper monitor={taskMonitor} />
-        {submitting && (
-          <>
-            <Modal.Header closeButton>
-              <Modal.Title>Resize {serverGroup.name}</Modal.Title>
-            </Modal.Header>
-            <Modal.Body>
-              <form className="form-horizontal">
-                <div className="form-group">
-                  <label className="col-md-4 control-label">Current Size</label>
-                  <div className="col-md-6">
-                    <p className="form-control-static">{currentSize}</p>
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label className="col-md-4 control-label" htmlFor="targetSize">
-                    Target Size
-                  </label>
-                  <div className="col-md-3">
-                    <input
-                      id="targetSize"
-                      type="number"
-                      className="form-control input-sm"
-                      value={targetSize}
-                      onChange={this.handleSizeChange}
-                      min="0"
-                    />
-                  </div>
-                </div>
-              </form>
-            </Modal.Body>
-            <Modal.Footer>
-              <button className="btn btn-default" onClick={this.cancel}>
-                Cancel
-              </button>
-              <button className="btn btn-primary" onClick={this.submit} disabled={isNaN(targetSize) || targetSize < 0}>
-                Resize
-              </button>
-            </Modal.Footer>
-          </>
-        )}
+        <Modal.Header closeButton>
+          <Modal.Title>Resize {serverGroup.name}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <form className="form-horizontal">
+            <div className="form-group">
+              <label className="col-md-4 control-label">Current Size</label>
+              <div className="col-md-6">
+                <p className="form-control-static">{currentSize}</p>
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="col-md-4 control-label" htmlFor="targetSize">
+                Target Size
+              </label>
+              <div className="col-md-3">
+                <input
+                  className="form-control input-sm"
+                  id="targetSize"
+                  min="0"
+                  onChange={this.handleSizeChange}
+                  type="number"
+                  value={targetSize}
+                />
+              </div>
+            </div>
+          </form>
+        </Modal.Body>
+        <Modal.Footer>
+          <button className="btn btn-default" onClick={this.cancel}>
+            Cancel
+          </button>
+          <button className="btn btn-primary" disabled={isNaN(targetSize) || targetSize < 0} onClick={this.submit}>
+            Resize
+          </button>
+        </Modal.Footer>
       </Modal>
     );
   }
