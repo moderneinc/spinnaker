@@ -16,6 +16,8 @@ import com.netflix.spinnaker.gate.services.internal.OrcaServiceSelector;
 import com.netflix.spinnaker.kork.retrofit.Retrofit2SyncCall;
 import com.netflix.spinnaker.security.AuthenticatedRequest;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,8 +35,8 @@ import org.springframework.stereotype.Component;
  *
  * <p>Today's dashboards (status page, deploy overview) iterate over ~20 service applications and
  * make three calls per app — server groups (Clouddriver), pipeline configs (Front50), pipeline
- * executions (Orca). That's 60 HTTP round trips and triggers ~60 SQL queries in Orca. This
- * service collapses it to three round trips:
+ * executions (Orca). That's 60 HTTP round trips and triggers ~60 SQL queries in Orca. This service
+ * collapses it to three round trips:
  *
  * <ul>
  *   <li>Clouddriver: one multi-app {@code /serverGroups?applications=…} call (in-memory cache).
@@ -45,9 +47,9 @@ import org.springframework.stereotype.Component;
  *
  * <p>Each shape is projected to the minimal fields a deploy-overview dashboard needs before
  * returning; the projection drops ~90% of bytes off each response. Disabled server groups are
- * dropped entirely (every cluster accumulates a long tail of historical SGs that dashboards
- * filter out anyway), and when {@code pipelineNames} is provided the pipeline configs and
- * executions are restricted to exact-name matches.
+ * dropped entirely (every cluster accumulates a long tail of historical SGs that dashboards filter
+ * out anyway), and when {@code pipelineNames} is provided the pipeline configs and executions are
+ * restricted to exact-name matches.
  */
 @Component
 public class DeploymentSnapshotService {
@@ -80,23 +82,40 @@ public class DeploymentSnapshotService {
     public List<Map<String, Object>> executions;
   }
 
+  /**
+   * The three independently-sourced lists a snapshot can carry; an unrequested one's backend is
+   * never called. Worth narrowing, because {@code PIPELINE_CONFIGS} costs front50's entire pipeline
+   * corpus (multiple MB) on every request regardless of the applications asked for.
+   */
+  public enum Section {
+    SERVER_GROUPS,
+    PIPELINE_CONFIGS,
+    EXECUTIONS;
+
+    public static final Set<Section> ALL =
+        Collections.unmodifiableSet(EnumSet.allOf(Section.class));
+  }
+
   public Snapshot getSnapshot(
       List<String> applications,
       List<String> pipelineNames,
       Integer pipelineLimit,
-      String statuses) {
+      String statuses,
+      boolean includeStages,
+      Set<Section> sections) {
     Snapshot snapshot = new Snapshot();
     snapshot.apps = new ArrayList<>();
     if (applications == null || applications.isEmpty()) return snapshot;
 
-    final List<String> pipelineNamesOrEmpty =
-        pipelineNames == null ? List.of() : pipelineNames;
+    final List<String> pipelineNamesOrEmpty = pipelineNames == null ? List.of() : pipelineNames;
     final Set<String> pipelineNameSet = new HashSet<>(pipelineNamesOrEmpty);
 
-    // Fan out the three backend calls in parallel. Each one short-circuits to an
-    // empty list on failure so a single backend hiccup doesn't blank the dashboard.
+    // Fan out the requested backend calls in parallel. Each one short-circuits to an
+    // empty list on failure so a single backend hiccup doesn't blank the dashboard;
+    // an unrequested section is never called at all.
     CompletableFuture<List<Map<String, Object>>> sgFuture =
-        runAsyncWithAuth(
+        runAsyncIfRequested(
+            sections.contains(Section.SERVER_GROUPS),
             () -> {
               @SuppressWarnings("unchecked")
               List<Map<String, Object>> result =
@@ -109,7 +128,8 @@ public class DeploymentSnapshotService {
             "clouddriver serverGroups batch");
 
     CompletableFuture<List<Map<String, Object>>> pipelinesFuture =
-        runAsyncWithAuth(
+        runAsyncIfRequested(
+            sections.contains(Section.PIPELINE_CONFIGS),
             () -> {
               @SuppressWarnings({"rawtypes", "unchecked"})
               List<Map<String, Object>> result =
@@ -120,13 +140,18 @@ public class DeploymentSnapshotService {
 
     final List<String> applicationsForOrca = applications;
     CompletableFuture<List<Map<String, Object>>> execsFuture =
-        runAsyncWithAuth(
+        runAsyncIfRequested(
+            sections.contains(Section.EXECUTIONS),
             () ->
                 Retrofit2SyncCall.execute(
                     orcaServiceSelector
                         .select()
                         .getDeploymentSnapshots(
-                            applicationsForOrca, pipelineNamesOrEmpty, statuses, pipelineLimit)),
+                            applicationsForOrca,
+                            pipelineNamesOrEmpty,
+                            statuses,
+                            pipelineLimit,
+                            includeStages)),
             "orca deploymentSnapshots batch");
 
     CompletableFuture.allOf(sgFuture, pipelinesFuture, execsFuture).join();
@@ -189,9 +214,9 @@ public class DeploymentSnapshotService {
   }
 
   /**
-   * Best-effort app-name resolution. Clouddriver's multi-app serverGroups payload sometimes
-   * omits {@code application} on individual entries; in that case derive it from the Frigga
-   * cluster name (everything up to the first "-").
+   * Best-effort app-name resolution. Clouddriver's multi-app serverGroups payload sometimes omits
+   * {@code application} on individual entries; in that case derive it from the Frigga cluster name
+   * (everything up to the first "-").
    */
   private static String resolveAppForServerGroup(Map<String, Object> sg, Set<String> wantedApps) {
     Object app = sg.get("application");
@@ -222,9 +247,9 @@ public class DeploymentSnapshotService {
   }
 
   /**
-   * Project a Clouddriver server group response to the surface a deploy-overview dashboard
-   * actually consumes. Drops launchConfig blobs, security groups, target group bindings,
-   * health-source roll-ups beyond `healthState`, etc.
+   * Project a Clouddriver server group response to the surface a deploy-overview dashboard actually
+   * consumes. Drops launchConfig blobs, security groups, target group bindings, health-source
+   * roll-ups beyond `healthState`, etc.
    */
   private static Map<String, Object> projectServerGroup(Map<String, Object> sg) {
     Map<String, Object> p = new LinkedHashMap<>();
@@ -306,10 +331,15 @@ public class DeploymentSnapshotService {
   }
 
   /**
-   * Run a fan-out call on the common pool with the caller's auth context propagated, and degrade
-   * to an empty list on failure so a single backend hiccup doesn't blank the dashboard. Mirrors
-   * the AuthenticatedRequest.propagate pattern used elsewhere in Gate (e.g. ApplicationService).
+   * Run a fan-out call on the common pool with the caller's auth context propagated, and degrade to
+   * an empty list on failure so a single backend hiccup doesn't blank the dashboard. Mirrors the
+   * AuthenticatedRequest.propagate pattern used elsewhere in Gate (e.g. ApplicationService).
    */
+  private static CompletableFuture<List<Map<String, Object>>> runAsyncIfRequested(
+      boolean requested, Callable<List<Map<String, Object>>> work, String label) {
+    return requested ? runAsyncWithAuth(work, label) : CompletableFuture.completedFuture(List.of());
+  }
+
   private static CompletableFuture<List<Map<String, Object>>> runAsyncWithAuth(
       Callable<List<Map<String, Object>>> work, String label) {
     Callable<List<Map<String, Object>>> propagated = AuthenticatedRequest.propagate(work);

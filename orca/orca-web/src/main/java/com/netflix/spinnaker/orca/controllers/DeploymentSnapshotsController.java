@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.http.HttpStatus;
 import org.springframework.lang.Nullable;
 import org.springframework.security.access.prepost.PostFilter;
 import org.springframework.security.access.prepost.PreFilter;
@@ -34,21 +35,23 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
 
 /**
- * Batch endpoint that returns recent pipeline executions across many applications in a single
- * SQL round trip. Companion to {@code TaskController#getPipelinesForApplication}, which only
- * accepts one application per request — fine for Deck's single-app pages but a 60×-round-trip
- * pattern for dashboards that need to summarize the deploy state of every service at once.
+ * Batch endpoint that returns recent pipeline executions across many applications in a single SQL
+ * round trip. Companion to {@code TaskController#getPipelinesForApplication}, which only accepts
+ * one application per request — fine for Deck's single-app pages but a 60×-round-trip pattern for
+ * dashboards that need to summarize the deploy state of every service at once.
  *
- * <p>Projection: returns {@link PipelineExecutionSummary}, a slim summary of each execution
- * (ids, status, timestamps, trigger summary, stage list). Drops outputs/context/tasks/
- * notifications, which typically account for 90%+ of an execution's serialized weight but
- * aren't needed for top-level dashboards.
+ * <p>Projection: returns {@link PipelineExecutionSummary}, a slim summary of each execution (ids,
+ * status, timestamps, trigger summary). Drops outputs/context/tasks/notifications, which typically
+ * account for 90%+ of an execution's serialized weight but aren't needed for top-level dashboards.
  *
- * <p>Auth: results are filtered post-hoc to executions whose application the caller has
- * READ permission on, matching the per-app guard on {@code getPipelinesForApplication}.
+ * <p>Pass {@code includeStages=true} to add each execution's stage graph, itself projected and
+ * still without per-stage context — what a dashboard needs to distinguish "waiting on a release
+ * window" from "deploying".
+ *
+ * <p>Auth: results are filtered post-hoc to executions whose application the caller has READ
+ * permission on, matching the per-app guard on {@code getPipelinesForApplication}.
  */
 @RestController
 public class DeploymentSnapshotsController {
@@ -68,10 +71,9 @@ public class DeploymentSnapshotsController {
   static final int MAX_LIMIT = 100;
 
   /**
-   * {@code @PreFilter} drops any application the caller doesn't have READ permission on
-   * BEFORE the SQL query runs (unlike {@code @PostFilter}, which runs after). Combined with
-   * the post-filter on the result list, unauthorized apps are gone from both the input
-   * predicate and the output rows.
+   * {@code @PreFilter} drops any application the caller doesn't have READ permission on BEFORE the
+   * SQL query runs (unlike {@code @PostFilter}, which runs after). Combined with the post-filter on
+   * the result list, unauthorized apps are gone from both the input predicate and the output rows.
    */
   @PreFilter(
       value = "hasPermission(filterObject, 'APPLICATION', 'READ')",
@@ -83,6 +85,7 @@ public class DeploymentSnapshotsController {
       @RequestParam(value = "pipelineNames", required = false) List<String> pipelineNames,
       @RequestParam(value = "statuses", required = false) String statuses,
       @RequestParam(value = "limit", defaultValue = "5") int limit,
+      @RequestParam(value = "includeStages", defaultValue = "false") boolean includeStages,
       @RequestParam(value = "queryTimeoutSeconds", defaultValue = "10") int queryTimeoutSeconds) {
 
     if (applications.size() > MAX_APPLICATIONS) {
@@ -91,8 +94,7 @@ public class DeploymentSnapshotsController {
           "applications must contain at most " + MAX_APPLICATIONS + " entries");
     }
     if (limit > MAX_LIMIT) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "limit must be <= " + MAX_LIMIT);
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "limit must be <= " + MAX_LIMIT);
     }
     // Strip empty / whitespace-only entries that come from sloppy CSV (e.g. "a,,b"
     // or "a, b"). @PreFilter has already dropped unauthorized apps; this is a
@@ -150,7 +152,7 @@ public class DeploymentSnapshotsController {
             applications, configIds, criteria, queryTimeoutSeconds);
 
     List<PipelineExecutionSummary> out = new ArrayList<>(executions.size());
-    for (PipelineExecution e : executions) out.add(PipelineExecutionSummary.from(e));
+    for (PipelineExecution e : executions) out.add(PipelineExecutionSummary.from(e, includeStages));
     // Sort newest first by startTime then id, matching getPipelinesForApplication.
     out.sort(
         (a, b) -> {
@@ -176,7 +178,8 @@ public class DeploymentSnapshotsController {
       Object app = p.get("application");
       Object name = p.get("name");
       Object id = p.get("id");
-      if (!(app instanceof String) || !(name instanceof String) || !(id instanceof String)) continue;
+      if (!(app instanceof String) || !(name instanceof String) || !(id instanceof String))
+        continue;
       if (!wantedApps.contains(app)) continue;
       if (!pipelineNameAllowlist.contains(name)) continue;
       ids.add((String) id);

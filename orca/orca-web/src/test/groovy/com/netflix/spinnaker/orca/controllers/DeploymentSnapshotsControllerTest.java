@@ -24,6 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.netflix.spinnaker.orca.api.pipeline.models.ExecutionStatus;
 import com.netflix.spinnaker.orca.api.pipeline.models.ExecutionType;
 import com.netflix.spinnaker.orca.api.pipeline.models.PipelineExecution;
+import com.netflix.spinnaker.orca.api.pipeline.models.StageExecution;
 import com.netflix.spinnaker.orca.pipeline.model.DefaultTrigger;
 import com.netflix.spinnaker.orca.pipeline.model.PipelineExecutionImpl;
 import com.netflix.spinnaker.orca.pipeline.model.StageExecutionImpl;
@@ -42,7 +43,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 @ExtendWith(SpringExtension.class)
-@SpringBootTest(classes = {DeploymentSnapshotsController.class}, webEnvironment = MOCK)
+@SpringBootTest(
+    classes = {DeploymentSnapshotsController.class},
+    webEnvironment = MOCK)
 @AutoConfigureMockMvc
 @EnableWebMvc
 @WithMockUser("dashboard")
@@ -55,18 +58,102 @@ class DeploymentSnapshotsControllerTest {
 
   @Test
   void returnsProjectedSummaryForBatchOfApplications() throws Exception {
-    when(executionRepository.retrievePipelineExecutionsForApplications(any(), any(), any(), anyInt()))
+    when(executionRepository.retrievePipelineExecutionsForApplications(
+            any(), any(), any(), anyInt()))
         .thenReturn(List.of(buildExecution("svc-a", "exec-1"), buildExecution("svc-b", "exec-2")));
 
     mvc.perform(get("/deploymentSnapshots").param("applications", "svc-a,svc-b"))
         .andExpect(status().is2xxSuccessful())
         // Both apps are represented in the response.
-        .andExpect(jsonPath("$[*].application").value(
-            org.hamcrest.Matchers.containsInAnyOrder("svc-a", "svc-b")))
-        // The projection keeps trigger + status + timestamps and drops the stage list
-        // entirely (clients fetch /pipelines/{id} for stage detail on click).
+        .andExpect(
+            jsonPath("$[*].application")
+                .value(org.hamcrest.Matchers.containsInAnyOrder("svc-a", "svc-b")))
         .andExpect(jsonPath("$[0].stages").doesNotExist())
         .andExpect(jsonPath("$[0].trigger.type").value("manual"));
+  }
+
+  @Test
+  void includeStagesReturnsTheStageGraphWithoutStageContext() throws Exception {
+    PipelineExecution exec = buildExecution("svc-a", "exec-4");
+    StageExecutionImpl parent = (StageExecutionImpl) exec.getStages().get(0);
+    parent.setContext(Map.of("clusters", List.of("a", "b", "c")));
+    parent.setOutputs(Map.of("bulky", "x".repeat(4096)));
+
+    StageExecutionImpl window = new StageExecutionImpl();
+    window.setExecution(exec);
+    window.setId("stage-2");
+    window.setRefId("2");
+    window.setName("Release window");
+    window.setType("restrictExecutionDuringTimeWindow");
+    window.setStatus(ExecutionStatus.RUNNING);
+    window.setParentStageId("stage-1");
+    window.setRequisiteStageRefIds(List.of("1"));
+    exec.getStages().add(window);
+
+    when(executionRepository.retrievePipelineExecutionsForApplications(
+            any(), any(), any(), anyInt()))
+        .thenReturn(List.of(exec));
+
+    mvc.perform(
+            get("/deploymentSnapshots")
+                .param("applications", "svc-a")
+                .param("includeStages", "true"))
+        .andExpect(status().is2xxSuccessful())
+        .andExpect(jsonPath("$[0].stages.length()").value(2))
+        .andExpect(jsonPath("$[0].stages[1].id").value("stage-2"))
+        .andExpect(jsonPath("$[0].stages[1].refId").value("2"))
+        .andExpect(jsonPath("$[0].stages[1].type").value("restrictExecutionDuringTimeWindow"))
+        .andExpect(jsonPath("$[0].stages[1].status").value("RUNNING"))
+        .andExpect(jsonPath("$[0].stages[1].parentStageId").value("stage-1"))
+        .andExpect(jsonPath("$[0].stages[1].requisiteStageRefIds[0]").value("1"))
+        // The point of the projection: the stage graph crosses the wire, the
+        // per-stage payload that dominates an execution body does not.
+        .andExpect(jsonPath("$[0].stages[0].context").doesNotExist())
+        .andExpect(jsonPath("$[0].stages[0].outputs").doesNotExist())
+        .andExpect(jsonPath("$[0].stages[0].tasks").doesNotExist());
+  }
+
+  @Test
+  void includeStagesLiftsSkippedWaitAndLastModifiedOutOfContext() throws Exception {
+    PipelineExecution exec = buildExecution("svc-a", "exec-5");
+    StageExecutionImpl soak = (StageExecutionImpl) exec.getStages().get(0);
+    soak.setRefId("soak");
+    soak.setStatus(ExecutionStatus.RUNNING);
+    // A stage PATCH from the UI writes the string form; typed tasks write a boolean.
+    soak.setContext(Map.of("skipRemainingWait", "true"));
+    StageExecution.LastModifiedDetails lastModified = new StageExecution.LastModifiedDetails();
+    lastModified.setUser("alice@example.com");
+    lastModified.setLastModifiedTime(1_700_000_000_000L);
+    soak.setLastModified(lastModified);
+
+    when(executionRepository.retrievePipelineExecutionsForApplications(
+            any(), any(), any(), anyInt()))
+        .thenReturn(List.of(exec));
+
+    mvc.perform(
+            get("/deploymentSnapshots")
+                .param("applications", "svc-a")
+                .param("includeStages", "true"))
+        .andExpect(status().is2xxSuccessful())
+        .andExpect(jsonPath("$[0].stages[0].skipRemainingWait").value(true))
+        .andExpect(jsonPath("$[0].stages[0].lastModified.user").value("alice@example.com"))
+        .andExpect(
+            jsonPath("$[0].stages[0].lastModified.lastModifiedTime").value(1_700_000_000_000L));
+  }
+
+  @Test
+  void stagesWithoutASkippedWaitOmitTheFlagEntirely() throws Exception {
+    when(executionRepository.retrievePipelineExecutionsForApplications(
+            any(), any(), any(), anyInt()))
+        .thenReturn(List.of(buildExecution("svc-a", "exec-6")));
+
+    mvc.perform(
+            get("/deploymentSnapshots")
+                .param("applications", "svc-a")
+                .param("includeStages", "true"))
+        .andExpect(status().is2xxSuccessful())
+        .andExpect(jsonPath("$[0].stages[0].skipRemainingWait").doesNotExist())
+        .andExpect(jsonPath("$[0].stages[0].lastModified").doesNotExist());
   }
 
   @Test
@@ -91,13 +178,13 @@ class DeploymentSnapshotsControllerTest {
             "exception",
             Map.of("details", Map.of("errors", List.of("ASG never reached desired capacity")))));
 
-    when(executionRepository.retrievePipelineExecutionsForApplications(any(), any(), any(), anyInt()))
+    when(executionRepository.retrievePipelineExecutionsForApplications(
+            any(), any(), any(), anyInt()))
         .thenReturn(List.of(exec));
 
     mvc.perform(get("/deploymentSnapshots").param("applications", "svc-a"))
         .andExpect(status().is2xxSuccessful())
-        .andExpect(jsonPath("$[0].failureMessage")
-            .value("ASG never reached desired capacity"));
+        .andExpect(jsonPath("$[0].failureMessage").value("ASG never reached desired capacity"));
   }
 
   private PipelineExecution buildExecution(String application, String id) {

@@ -11,12 +11,14 @@
 package com.netflix.spinnaker.orca.controllers;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.netflix.spinnaker.orca.api.pipeline.SyntheticStageOwner;
 import com.netflix.spinnaker.orca.api.pipeline.models.ExecutionStatus;
 import com.netflix.spinnaker.orca.api.pipeline.models.PipelineExecution;
 import com.netflix.spinnaker.orca.api.pipeline.models.StageExecution;
 import com.netflix.spinnaker.orca.api.pipeline.models.Trigger;
 import com.netflix.spinnaker.orca.pipeline.model.DockerTrigger;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,20 +26,15 @@ import java.util.Optional;
 
 /**
  * Minimal projection of a {@link PipelineExecution} for dashboards that fan out across many
- * applications and only need surface-level status. Drops outputs/context/tasks/notifications/
- * stages and keeps just the fields needed to render a deploy-pipeline overview: ids, status,
- * timestamps, trigger summary, and a top-level failure message lifted from the first failed
- * stage so failure reasons stay legible without the stage list.
+ * applications and only need surface-level status. Drops outputs/context/tasks/notifications and
+ * keeps just the fields needed to render a deploy-pipeline overview: ids, status, timestamps,
+ * trigger summary, and a top-level failure message lifted from the first failed stage so failure
+ * reasons stay legible without the stage list.
  *
- * <p>Stage detail is deliberately excluded: dashboards render a stage strip only when the user
- * focuses a single execution, and at that point can fetch the full execution body via Gate's
- * existing {@code GET /pipelines/{id}} endpoint. Inlining stages into every snapshot would
- * dominate the payload (5-10 stages per execution × 100s of executions per snapshot) for data
- * that's only consumed on click.
- *
- * <p>Serializing the projection rather than the full {@code PipelineExecution} cuts each
- * snapshot's wire size by ~20-50x in practice and keeps the dashboard's payload below the
- * point where browser JSON parsing becomes the bottleneck.
+ * <p>Stage detail is opt-in via {@link #from(PipelineExecution, boolean)}; even when requested, a
+ * stage's {@code context}, {@code outputs} and {@code tasks} are never serialized. Those hold the
+ * bulk of an execution's bytes — a full {@code deploy-all-fanout} body runs ~1MB against a few KB
+ * for the same execution as a summary with {@link StageView} stages.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class PipelineExecutionSummary {
@@ -50,21 +47,67 @@ public class PipelineExecutionSummary {
   public Long startTime;
   public Long endTime;
   public TriggerView trigger;
+
   /**
-   * First non-empty failure string lifted from the failed stages, so a dashboard can render
-   * the actual reason ("Wait for cluster healthy timed out") next to a red execution without
-   * having to fetch the full stage list.
+   * First non-empty failure string lifted from the failed stages, so a dashboard can render the
+   * actual reason ("Wait for cluster healthy timed out") next to a red execution without having to
+   * fetch the full stage list.
    */
   public String failureMessage;
+
+  /** Null unless the caller asked for stages. */
+  public List<StageView> stages;
+
+  /**
+   * Enough of a stage to draw and act on the execution graph, without its {@code context}, {@code
+   * outputs} or {@code tasks}. Two values are lifted out of {@code context} rather than shipping
+   * the whole map: {@code skipRemainingWait}, the only way to tell a skipped wait from a pending
+   * one, and {@code failureMessage}, resolved through the same two-location lookup the
+   * execution-level message uses.
+   */
+  @JsonInclude(JsonInclude.Include.NON_NULL)
+  public static class StageView {
+    public String id;
+    public String refId;
+    public String type;
+    public String name;
+    public ExecutionStatus status;
+    public Long startTime;
+    public Long endTime;
+    public String parentStageId;
+
+    /** {@code STAGE_BEFORE}/{@code STAGE_AFTER} on Spinnaker's synthetic child stages. */
+    public String syntheticStageOwner;
+
+    public Collection<String> requisiteStageRefIds;
+    public LastModifiedView lastModified;
+
+    /**
+     * {@code context.skipRemainingWait} — set when an operator skipped a pending wait (a dev soak,
+     * a release window). A stage stub alone can't distinguish a skip from an undo.
+     */
+    public Boolean skipRemainingWait;
+
+    public String failureMessage;
+  }
+
+  @JsonInclude(JsonInclude.Include.NON_NULL)
+  public static class LastModifiedView {
+    public String user;
+    public Long lastModifiedTime;
+  }
 
   @JsonInclude(JsonInclude.Include.NON_NULL)
   public static class TriggerView {
     public String type;
     public String user;
+
     /** Parameters bound at trigger time. Carries the docker `tag` for deploy-* pipelines. */
     public Map<String, Object> parameters;
+
     /** Top-level `tag` field — only set on docker-trigger executions. */
     public String tag;
+
     public List<ArtifactView> artifacts;
     public List<ExpectedArtifactView> resolvedExpectedArtifacts;
   }
@@ -82,7 +125,7 @@ public class PipelineExecutionSummary {
     public ArtifactView boundArtifact;
   }
 
-  public static PipelineExecutionSummary from(PipelineExecution exec) {
+  public static PipelineExecutionSummary from(PipelineExecution exec, boolean includeStages) {
     PipelineExecutionSummary v = new PipelineExecutionSummary();
     v.id = exec.getId();
     v.name = exec.getName();
@@ -93,7 +136,58 @@ public class PipelineExecutionSummary {
     v.endTime = exec.getEndTime();
     v.trigger = projectTrigger(exec.getTrigger());
     v.failureMessage = pickFailureMessage(exec.getStages());
+    if (includeStages) {
+      v.stages = projectStages(exec.getStages());
+    }
     return v;
+  }
+
+  private static List<StageView> projectStages(List<StageExecution> stages) {
+    if (stages == null) return List.of();
+    List<StageView> out = new ArrayList<>(stages.size());
+    for (StageExecution s : stages) {
+      StageView sv = new StageView();
+      sv.id = s.getId();
+      sv.refId = s.getRefId();
+      sv.type = s.getType();
+      sv.name = s.getName();
+      sv.status = s.getStatus();
+      sv.startTime = s.getStartTime();
+      sv.endTime = s.getEndTime();
+      sv.parentStageId = s.getParentStageId();
+      SyntheticStageOwner owner = s.getSyntheticStageOwner();
+      sv.syntheticStageOwner = owner == null ? null : owner.name();
+      Collection<String> reqs = s.getRequisiteStageRefIds();
+      if (reqs != null && !reqs.isEmpty()) {
+        sv.requisiteStageRefIds = new ArrayList<>(reqs);
+      }
+      StageExecution.LastModifiedDetails lm = s.getLastModified();
+      if (lm != null) {
+        LastModifiedView lv = new LastModifiedView();
+        lv.user = lm.getUser();
+        lv.lastModifiedTime = lm.getLastModifiedTime();
+        sv.lastModified = lv;
+      }
+      sv.skipRemainingWait = readSkipRemainingWait(s.getContext());
+      if (sv.status != null && sv.status.isFailure()) {
+        sv.failureMessage = extractFailureMessage(s);
+      }
+      out.add(sv);
+    }
+    return out;
+  }
+
+  /**
+   * Orca writes {@code skipRemainingWait} as either a boolean or the string {@code "true"},
+   * depending on whether it arrived via a typed task or a stage PATCH from the UI. Returns null
+   * when absent so the field stays off the wire for the overwhelming majority of stages.
+   */
+  private static Boolean readSkipRemainingWait(Map<String, Object> ctx) {
+    if (ctx == null) return null;
+    Object raw = ctx.get("skipRemainingWait");
+    if (raw instanceof Boolean) return (Boolean) raw;
+    if (raw instanceof String) return Boolean.parseBoolean((String) raw);
+    return null;
   }
 
   private static TriggerView projectTrigger(Trigger t) {
@@ -145,9 +239,9 @@ public class PipelineExecutionSummary {
   }
 
   /**
-   * Find the first non-empty failure string across the failed stages. Walks stages in
-   * declaration order — good enough for a one-line dashboard summary; the click-through
-   * detail view (Gate's {@code /pipelines/{id}}) can reconstruct the full stage graph.
+   * Find the first non-empty failure string across the failed stages. Walks stages in declaration
+   * order — good enough for a one-line dashboard summary; the click-through detail view (Gate's
+   * {@code /pipelines/{id}}) can reconstruct the full stage graph.
    */
   private static String pickFailureMessage(List<StageExecution> stages) {
     if (stages == null || stages.isEmpty()) return null;
@@ -160,10 +254,10 @@ public class PipelineExecutionSummary {
   }
 
   /**
-   * Pull a human-readable failure string off a stage. Spinnaker stores it in two places
-   * depending on which task failed: clouddriver tasks set `outputs.failureMessage` directly,
-   * while pipeline-level exceptions land under `context.exception.details.errors[0]`. Prefer
-   * the explicit outputs.failureMessage and fall back to the exception detail.
+   * Pull a human-readable failure string off a stage. Spinnaker stores it in two places depending
+   * on which task failed: clouddriver tasks set `outputs.failureMessage` directly, while
+   * pipeline-level exceptions land under `context.exception.details.errors[0]`. Prefer the explicit
+   * outputs.failureMessage and fall back to the exception detail.
    */
   private static String extractFailureMessage(StageExecution s) {
     Map<String, Object> outputs = s.getOutputs();
