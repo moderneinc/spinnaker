@@ -54,7 +54,8 @@ public interface OrcaService {
       @Query("applications") List<String> applications,
       @Query("pipelineNames") List<String> pipelineNames,
       @Query("statuses") String statuses,
-      @Query("limit") Integer limit);
+      @Query("limit") Integer limit,
+      @Query("includeStages") Boolean includeStages);
 
   /** Retrieve pipeline executions for a project. Orca returns a list of PipelineExecution. */
   @Headers("Accept: application/json")
