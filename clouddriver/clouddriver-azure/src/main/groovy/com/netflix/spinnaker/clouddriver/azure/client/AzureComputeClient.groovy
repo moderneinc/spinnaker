@@ -306,9 +306,11 @@ public class AzureComputeClient extends AzureBaseClient {
     def instances = new ArrayList<AzureInstance>()
 
     executeOp({
-      List<VirtualMachineScaleSetVM> vms = azure.virtualMachineScaleSets().getByResourceGroup(resourceGroupName, serverGroupName)?.virtualMachines()?.list()?.asList()
+      def scaleSet = azure.virtualMachineScaleSets().getByResourceGroup(resourceGroupName, serverGroupName)
+      boolean servingTraffic = scaleSet && !AzureServerGroupDescription.build(scaleSet.innerModel()).disabled
+      List<VirtualMachineScaleSetVM> vms = scaleSet?.virtualMachines()?.list()?.asList()
       vms?.each {
-        instances.add(AzureInstance.build(it))
+        instances.add(AzureInstance.build(it, servingTraffic))
       }
     })
 

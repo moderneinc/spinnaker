@@ -45,7 +45,7 @@ class AzureInstance implements Instance, Serializable {
   final String providerType = AzureCloudProvider.ID
   final String cloudProvider = AzureCloudProvider.ID
 
-  static AzureInstance build(VirtualMachineScaleSetVM vm) {
+  static AzureInstance build(VirtualMachineScaleSetVM vm, boolean servingTraffic = true) {
     AzureInstance instance = new AzureInstance()
     instance.name = vm.name()
     instance.instanceType = vm.sku().name()
@@ -85,7 +85,7 @@ class AzureInstance implements Instance, Serializable {
     if (applicationHealth) {
       instance.health << ([
         type : APP_HEALTH_PROVIDER,
-        state: applicationHealth.toString()
+        state: (servingTraffic ? applicationHealth : HealthState.OutOfService).toString()
       ] as Map<String, Object>)
     }
 
