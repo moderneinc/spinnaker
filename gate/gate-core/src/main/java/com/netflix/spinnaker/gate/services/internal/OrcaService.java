@@ -36,7 +36,8 @@ public interface OrcaService {
       @Query("statuses") String statuses,
       @Query("expand") Boolean expand,
       @Query("pipelineNameFilter") String pipelineNameFilter,
-      @Query("pipelineLimit") Integer pipelineLimit);
+      @Query("pipelineLimit") Integer pipelineLimit,
+      @Query("includeDeletedPipelines") boolean includeDeletedPipelines);
 
   /**
    * Batch counterpart to {@link #getPipelines}: returns recent pipeline executions across every
@@ -117,7 +118,8 @@ public interface OrcaService {
       @Query("startIndex") int startIndex,
       @Query("size") int size,
       @Query("reverse") boolean reverse,
-      @Query("expand") boolean expand);
+      @Query("expand") boolean expand,
+      @Query("includeDeletedPipelines") boolean includeDeletedPipelines);
 
   /** Retrieve a single pipeline execution by ID. Orca returns a PipelineExecution. */
   @Headers("Accept: application/json")

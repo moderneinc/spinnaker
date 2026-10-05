@@ -119,9 +119,9 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.jackson2.autoconfigure.Jackson2ObjectMapperBuilderCustomizer;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -168,11 +168,6 @@ class CloudDriverConfig {
       jacksonObjectMapperBuilder.serializationInclusion(JsonInclude.Include.NON_NULL);
       jacksonObjectMapperBuilder.failOnEmptyBeans(false);
       jacksonObjectMapperBuilder.failOnUnknownProperties(false);
-      // Cache attributes and provider models treat numeric timestamps as epoch millis, which is
-      // what java.util.Date yielded. Jackson writes an Instant as fractional seconds instead
-      // unless nanosecond timestamps are off, so AWS SDK v2 shapes would cache a value 1000x
-      // too small. Both directions must agree: cached attributes are read back into SDK v2
-      // models (e.g. EcsInstanceCacheClient -> ec2.Instance).
       jacksonObjectMapperBuilder.featuresToDisable(
           SerializationFeature.WRITE_DATE_TIMESTAMPS_AS_NANOSECONDS,
           DeserializationFeature.READ_DATE_TIMESTAMPS_AS_NANOSECONDS);
