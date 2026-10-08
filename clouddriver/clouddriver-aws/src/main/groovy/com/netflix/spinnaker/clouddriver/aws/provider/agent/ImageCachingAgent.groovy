@@ -157,9 +157,7 @@ class ImageCachingAgent implements CachingAgent, AccountAware, DriftMetric, Cust
           name              : image.name(),
           virtualizationType: image.virtualizationTypeAsString(),
           architecture      : image.architectureAsString(),
-          creationDate      : image.creationDate(),
-          imageOwnerAlias   : image.imageOwnerAlias(),
-          ownerId           : image.ownerId()
+          creationDate      : image.creationDate()
         ], [(IMAGES.ns): [imageId]]))
       } else {
         // There's already a named image with this name, so add the imageId to
