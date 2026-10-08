@@ -28,6 +28,12 @@ runs:
     - name: Tar Distribution
       shell: bash
       run: |
+        # Deck's stock settings.js points at localhost:8084; keep it out so extraction can't overwrite ours.
+        excludes=()
+        if [[ "${{ inputs.project }}" == "deck" ]]; then
+          excludes=(--exclude=./settings.js)
+        fi
         tar -cf ${{ inputs.project }}-${{ github.sha }}.tar \
+          "${excludes[@]}" \
           -C ${{ steps.vars.outputs.path }} \
           .
