@@ -4,8 +4,10 @@ import { EcsServerGroupCommandBuilder } from './serverGroupCommandBuilder.servic
 
 describe('EcsServerGroupCommandBuilder', () => {
   it('builds a new server group command when no defaults are provided (create flow passes null)', async () => {
-    spyOn(AccountService, 'getAvailabilityZonesForAccountAndRegion').and.returnValue(Promise.resolve(['us-west-2a']));
-    spyOn(AccountService, 'getCredentialsKeyedByAccount').and.returnValue(Promise.resolve({}));
+    vi.spyOn(AccountService, 'getAvailabilityZonesForAccountAndRegion').mockReturnValue(
+      Promise.resolve(['us-west-2a']),
+    );
+    vi.spyOn(AccountService, 'getCredentialsKeyedByAccount').mockReturnValue(Promise.resolve({}));
 
     const command = await new EcsServerGroupCommandBuilder().buildNewServerGroupCommand(
       {
@@ -18,11 +20,16 @@ describe('EcsServerGroupCommandBuilder', () => {
 
     expect(command.credentials).toBe('ecs-prod');
     expect(command.region).toBe('us-west-2');
+    expect(command.copySourceScalingPoliciesAndActions).toBe(true);
+    expect(command.copySourceMonitoringConfiguration).toBe(true);
+    expect(command.monitoringConfiguration).toBeUndefined();
   });
 
   it('builds pipeline commands when availability zones are missing', async () => {
-    spyOn(AccountService, 'getAvailabilityZonesForAccountAndRegion').and.returnValue(Promise.resolve(['us-west-2a']));
-    spyOn(AccountService, 'getCredentialsKeyedByAccount').and.returnValue(Promise.resolve({}));
+    vi.spyOn(AccountService, 'getAvailabilityZonesForAccountAndRegion').mockReturnValue(
+      Promise.resolve(['us-west-2a']),
+    );
+    vi.spyOn(AccountService, 'getCredentialsKeyedByAccount').mockReturnValue(Promise.resolve({}));
 
     const command = await new EcsServerGroupCommandBuilder().buildServerGroupCommandFromPipeline(
       {
@@ -44,8 +51,10 @@ describe('EcsServerGroupCommandBuilder', () => {
   });
 
   it('builds pipeline commands when source capacity omits explicit capacity', async () => {
-    spyOn(AccountService, 'getAvailabilityZonesForAccountAndRegion').and.returnValue(Promise.resolve(['us-west-2a']));
-    spyOn(AccountService, 'getCredentialsKeyedByAccount').and.returnValue(Promise.resolve({}));
+    vi.spyOn(AccountService, 'getAvailabilityZonesForAccountAndRegion').mockReturnValue(
+      Promise.resolve(['us-west-2a']),
+    );
+    vi.spyOn(AccountService, 'getCredentialsKeyedByAccount').mockReturnValue(Promise.resolve({}));
 
     const command = await new EcsServerGroupCommandBuilder().buildServerGroupCommandFromPipeline(
       {
@@ -72,7 +81,7 @@ describe('EcsServerGroupCommandBuilder', () => {
     } as any);
 
     expect(command).toEqual(
-      jasmine.objectContaining({
+      expect.objectContaining({
         asgs: [{ asgName: 'api-main-v001', region: 'eu-west-1' }],
         credentials: 'ecs-prod',
         healthCheckType: undefined,

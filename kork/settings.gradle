@@ -22,6 +22,7 @@ include(
   "kork-annotations",
   "kork-api",
   "kork-artifacts",
+  "kork-artifacts-sql",
   "kork-atlas",
   "kork-aws",
   "kork-bom",
