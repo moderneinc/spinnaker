@@ -201,6 +201,50 @@ class AzureInstanceSpec extends Specification {
       StatusLevelTypes.ERROR  || HealthState.Down
   }
 
+  @Unroll
+  void "a scale set out of the backend pool reports OutOfService, whatever the app reports (#level)"() {
+    given: "the VM still answers its probe, but the scale set has left the backend pool"
+      def vm = vmWith(powerState: 'Running',
+                      extensionType: AzureInstance.APP_HEALTH_EXT_LINUX,
+                      extensionLevel: level)
+
+    when:
+      def instance = AzureInstance.build(vm, false)
+
+    then:
+      instance.health[1].type == AzureInstance.APP_HEALTH_PROVIDER
+      instance.health[1].state == 'OutOfService'
+
+    and: "the platform's view is independent of pool membership"
+      instance.health[0].type == 'Azure'
+      instance.health[0].state == 'Unknown'
+
+    and: "nothing claims Up, which is what lets orca's disable wait finish"
+      instance.health.every { it.state != HealthState.Up.toString() }
+      instance.healthState == HealthState.OutOfService
+
+    where:
+      level << [StatusLevelTypes.INFO, StatusLevelTypes.ERROR]
+  }
+
+  void "a scale set in the backend pool still reports what the app reports"() {
+    given:
+      def vm = vmWith(powerState: 'Running',
+                      extensionType: AzureInstance.APP_HEALTH_EXT_LINUX,
+                      extensionLevel: StatusLevelTypes.INFO)
+
+    expect:
+      AzureInstance.build(vm, true).health[1].state == 'Up'
+  }
+
+  void "no application provider is invented for an out-of-pool VM without the extension"() {
+    given:
+      def vm = vmWith(powerState: 'Running')
+
+    expect: "a lone Unknown platform entry is already treated as down by orca"
+      AzureInstance.build(vm, false).health.size() == 1
+  }
+
   void "an extension reporting no substatuses yields no application provider"() {
     given:
       def vm = vmWith(powerState: 'Running', extensionType: AzureInstance.APP_HEALTH_EXT_LINUX)
