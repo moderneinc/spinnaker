@@ -131,6 +131,8 @@ class ImageCachingAgentSpec extends Specification {
       .name('enums')
       .virtualizationType('hvm')
       .architecture('arm64')
+      .imageOwnerAlias('amazon')
+      .ownerId('099720109477')
       .build()
 
     and:
@@ -148,38 +150,15 @@ class ImageCachingAgentSpec extends Specification {
     def namedImage = result.cacheResults[NAMED_IMAGES.ns].find { it.id == Keys.getNamedImageKey(accountName, 'enums') }
     namedImage.attributes.virtualizationType == 'hvm'
     namedImage.attributes.architecture == 'arm64'
+    namedImage.attributes.imageOwnerAlias == 'amazon'
+    namedImage.attributes.ownerId == '099720109477'
 
     and: 'and so agrees with the image namespace, which goes through SdkPojoSerializer'
     def cachedImage = result.cacheResults[IMAGES.ns].find { it.id == Keys.getImageKey('ami-3', accountName, region) }
     cachedImage.attributes.virtualizationType == namedImage.attributes.virtualizationType
     cachedImage.attributes.architecture == namedImage.attributes.architecture
-  }
-
-  void "named images carry the owner that rosco's base image lookup filters on"() {
-    given: 'a public Ubuntu AMI, as EC2 describes it'
-    Image image = Image.builder()
-      .imageId('ami-4')
-      .name('ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-arm64-server-20261004')
-      .virtualizationType('hvm')
-      .imageOwnerAlias('amazon')
-      .ownerId('099720109477')
-      .build()
-
-    and:
-    def agent = getAgent(false)
-    def request = DescribeImagesRequest.builder().filters(Filter.builder().name('is-public').values(['false']).build()).build()
-
-    when:
-    def result = agent.loadData(providerCache)
-
-    then:
-    1 * ec2.describeImages(request) >> DescribeImagesResponse.builder().images(image).build()
-    0 * _
-
-    and: 'rosco drops every candidate without these when imageOwnerAlias or ownerId is configured'
-    def namedImage = result.cacheResults[NAMED_IMAGES.ns].find { it.id == Keys.getNamedImageKey(accountName, image.name()) }
-    namedImage.attributes.imageOwnerAlias == 'amazon'
-    namedImage.attributes.ownerId == '099720109477'
+    cachedImage.attributes.imageOwnerAlias == namedImage.attributes.imageOwnerAlias
+    cachedImage.attributes.ownerId == namedImage.attributes.ownerId
   }
 
   void "include the filter corresponding to the configured image states"() {
