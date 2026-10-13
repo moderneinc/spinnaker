@@ -131,6 +131,8 @@ class ImageCachingAgentSpec extends Specification {
       .name('enums')
       .virtualizationType('hvm')
       .architecture('arm64')
+      .imageOwnerAlias('amazon')
+      .ownerId('099720109477')
       .build()
 
     and:
@@ -148,11 +150,15 @@ class ImageCachingAgentSpec extends Specification {
     def namedImage = result.cacheResults[NAMED_IMAGES.ns].find { it.id == Keys.getNamedImageKey(accountName, 'enums') }
     namedImage.attributes.virtualizationType == 'hvm'
     namedImage.attributes.architecture == 'arm64'
+    namedImage.attributes.imageOwnerAlias == 'amazon'
+    namedImage.attributes.ownerId == '099720109477'
 
     and: 'and so agrees with the image namespace, which goes through SdkPojoSerializer'
     def cachedImage = result.cacheResults[IMAGES.ns].find { it.id == Keys.getImageKey('ami-3', accountName, region) }
     cachedImage.attributes.virtualizationType == namedImage.attributes.virtualizationType
     cachedImage.attributes.architecture == namedImage.attributes.architecture
+    cachedImage.attributes.imageOwnerAlias == namedImage.attributes.imageOwnerAlias
+    cachedImage.attributes.ownerId == namedImage.attributes.ownerId
   }
 
   void "include the filter corresponding to the configured image states"() {

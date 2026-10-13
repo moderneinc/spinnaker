@@ -172,7 +172,9 @@ class AmazonNamedImageLookupControllerSpec extends Specification {
                                                                      [(NAMED_IMAGES.ns): [namedImageId]])]
     def namedImageCacheAttributes = [name: amiName,
                                      virtualizationType: 'hvm', // arbitrary
-                                     creationDate: '2021-08-03T22:27:50.000Z'] // arbitrary
+                                     creationDate: '2021-08-03T22:27:50.000Z', // arbitrary
+                                     imageOwnerAlias: 'amazon', // rosco filters on the owner keys
+                                     ownerId: '099720109477']
 
     def Collection<CacheData> namedImageCacheData = [new DefaultCacheData(namedImageId,
                                                                           namedImageCacheAttributes,
