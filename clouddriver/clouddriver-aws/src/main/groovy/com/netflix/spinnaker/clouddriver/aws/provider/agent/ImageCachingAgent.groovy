@@ -153,10 +153,14 @@ class ImageCachingAgent implements CachingAgent, AccountAware, DriftMetric, Cust
 
       CacheData namedImageCacheData = namedImageCacheDataMap.get(namedImageId);
       if (namedImageCacheData == null) {
-        // Copied from the IMAGES attributes so the two namespaces agree; rosco's base image lookup filters on the owner keys.
-        namedImageCacheDataMap.put(namedImageId, new DefaultCacheData(namedImageId,
-          attributes.subMap(['name', 'virtualizationType', 'architecture', 'creationDate', 'imageOwnerAlias', 'ownerId']),
-          [(IMAGES.ns): [imageId]]))
+        namedImageCacheDataMap.put(namedImageId, new DefaultCacheData(namedImageId, [
+          name              : image.name(),
+          virtualizationType: image.virtualizationTypeAsString(),
+          architecture      : image.architectureAsString(),
+          creationDate      : image.creationDate(),
+          imageOwnerAlias   : image.imageOwnerAlias(),
+          ownerId           : image.ownerId()
+        ], [(IMAGES.ns): [imageId]]))
       } else {
         // There's already a named image with this name, so add the imageId to
         // the IMAGES.ns relationship.  Note though that there is only one
