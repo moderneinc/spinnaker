@@ -164,7 +164,8 @@ abstract class AzureBaseClient {
     boolean retry = false
     if (e instanceof ManagementException) {
       def code = (e as ManagementException).getResponse().getStatusCode()
-      retry = (code == HttpURLConnection.HTTP_CLIENT_TIMEOUT
+      retry = (code == HttpURLConnection.HTTP_CONFLICT
+        || code == HttpURLConnection.HTTP_CLIENT_TIMEOUT
         || (code >= HttpURLConnection.HTTP_INTERNAL_ERROR && code <= HttpURLConnection.HTTP_GATEWAY_TIMEOUT))
     } else if (e instanceof SocketTimeoutException) {
       //If we get a socket time out try again
