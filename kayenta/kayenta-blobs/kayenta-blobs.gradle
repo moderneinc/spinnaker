@@ -3,5 +3,5 @@ dependencies {
     implementation project(":kayenta-azure")
 
     api 'com.microsoft.azure:azure-storage:8.3.0'
-    testImplementation group: 'org.mockito', name: 'mockito-core', version: '1.9.10'
+    testImplementation "org.mockito:mockito-core:1.9.10"
 }

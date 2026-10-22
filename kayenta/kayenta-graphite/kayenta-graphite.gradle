@@ -49,8 +49,8 @@ int getOpenPort(String service) {
 
 //noinspection GroovyAssignabilityCheck
 task startEmbeddedRedis() {
-    group 'Application'
-    description 'Starts an embedded Valkey server on an open port.'
+    group = 'Application'
+    description = 'Starts an embedded Valkey server on an open port.'
 
     doLast {
         def redisPort = getOpenPort("Redis")
@@ -75,8 +75,8 @@ task startEmbeddedRedis() {
 //noinspection GroovyAssignabilityCheck
 task stopEmbeddedRedis() {
     dependsOn startEmbeddedRedis
-    group 'Application'
-    description 'Stops the embedded Valkey server.'
+    group = 'Application'
+    description = 'Stops the embedded Valkey server.'
 
     doLast {
         startEmbeddedRedis.ext.dockerClient.stopContainerCmd(startEmbeddedRedis.ext.container.getId()).exec()
@@ -85,8 +85,8 @@ task stopEmbeddedRedis() {
 
 //noinspection GroovyAssignabilityCheck
 task startGraphite() {
-    group 'Application'
-    description 'Starts an embedded Graphite'
+    group = 'Application'
+    description = 'Starts an embedded Graphite'
 
     doLast {
         def graphiteTag = getRequiredSystemPropWithDefault('graphite.tag', 'latest')
@@ -114,8 +114,8 @@ task startGraphite() {
 //noinspection GroovyAssignabilityCheck
 task stopGraphite() {
     dependsOn startGraphite
-    group 'Application'
-    description 'Stops the embedded Graphite'
+    group = 'Application'
+    description = 'Stops the embedded Graphite'
 
     doLast {
         startGraphite.ext.dockerClient.stopContainerCmd(startGraphite.ext.container.getId()).exec()
