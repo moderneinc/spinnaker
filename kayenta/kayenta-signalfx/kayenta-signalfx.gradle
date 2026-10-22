@@ -28,8 +28,8 @@ configurations {
 
 //noinspection GroovyAssignabilityCheck
 task startEmbeddedRedis() {
-  group 'Application'
-  description 'Starts an embedded Valkey server on an open port.'
+  group = 'Application'
+  description = 'Starts an embedded Valkey server on an open port.'
 
   doLast {
     def redisContainer = new GenericContainer(DockerImageName.parse("valkey/valkey:8"))
@@ -43,8 +43,8 @@ task startEmbeddedRedis() {
 //noinspection GroovyAssignabilityCheck
 task stopEmbeddedRedis() {
   dependsOn startEmbeddedRedis
-  group 'Application'
-  description 'Stops the embedded Valkey server.'
+  group = 'Application'
+  description = 'Stops the embedded Valkey server.'
 
   doLast {
     startEmbeddedRedis.ext.redisContainer.stop()

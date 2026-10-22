@@ -9,6 +9,6 @@ dependencies {
 task ktlintIdea(type: JavaExec, group: "init") {
   description = "Apply ktlint rules to IntelliJ"
   classpath = configurations.ktlint
-  main = "com.github.shyiko.ktlint.Main"
+  mainClass = "com.github.shyiko.ktlint.Main"
   args "--apply-to-idea-project", "-y"
 }
