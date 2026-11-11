@@ -44,8 +44,7 @@ public class FindArtifactFromExecutionTask implements Task {
 
   @Autowired
   public FindArtifactFromExecutionTask(
-      ArtifactUtils artifactUtils,
-      DockerLatestResolutionService dockerLatestResolutionService) {
+      ArtifactUtils artifactUtils, DockerLatestResolutionService dockerLatestResolutionService) {
     this.artifactUtils = artifactUtils;
     this.dockerLatestResolutionService = dockerLatestResolutionService;
   }
