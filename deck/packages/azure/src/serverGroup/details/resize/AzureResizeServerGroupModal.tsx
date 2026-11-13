@@ -5,6 +5,7 @@ import type { Application, DeckRuntimeServices, IServerGroup } from '@spinnaker/
 import {
   confirmNotManaged,
   DeckRuntimeContext,
+  ModalClose,
   noop,
   ReactModal,
   TaskMonitor,
@@ -89,9 +90,10 @@ export class AzureResizeServerGroupModal extends React.Component<
     const currentSize = toCount(serverGroup.capacity?.desired);
 
     return (
-      <Modal show={true} onHide={this.cancel}>
+      <>
         <TaskMonitorWrapper monitor={taskMonitor} />
-        <Modal.Header closeButton>
+        <ModalClose dismiss={this.cancel} />
+        <Modal.Header>
           <Modal.Title>Resize {serverGroup.name}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
@@ -127,7 +129,7 @@ export class AzureResizeServerGroupModal extends React.Component<
             Resize
           </button>
         </Modal.Footer>
-      </Modal>
+      </>
     );
   }
 }

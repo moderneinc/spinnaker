@@ -168,7 +168,14 @@ describe('Azure server group details', () => {
 
   it('wires destroy, disable, and enable actions to confirmation modals', () => {
     const app = buildApp();
-    const serverGroup = { name: 'azure-v001', account: 'test-account', region: 'westus', isDisabled: false };
+    // Out-of-service instances make Enable reachable on a server group that is not itself disabled.
+    const serverGroup = {
+      name: 'azure-v001',
+      account: 'test-account',
+      region: 'westus',
+      isDisabled: false,
+      instanceCounts: { outOfService: 1 },
+    };
     vi.spyOn(ConfirmationModalService, 'confirm').mockReturnValue(undefined);
     vi.spyOn(ServerGroupWarningMessageService, 'addDestroyWarningMessage').mockReturnValue(undefined);
     vi.spyOn(ServerGroupWarningMessageService, 'addDisableWarningMessage').mockReturnValue(undefined);
@@ -246,5 +253,60 @@ describe('Azure server group details', () => {
     expect(props.command.images).toBe(images);
     expect(props.command.imageName).toBe('ubuntu-west');
     expect(props.command.selectedImage).toBe(images[0]);
+  });
+
+  describe('action menu entries', () => {
+    const coordinates = { cluster: 'azure', account: 'test-account', region: 'westus' };
+
+    function menuEntries(container: HTMLElement): string[] {
+      return Array.from(container.querySelectorAll('.dropdown-menu > li')).map((li) =>
+        li.classList.contains('divider') ? '---' : (li.textContent || '').trim(),
+      );
+    }
+
+    it('separates Rollback from the rest of the menu and offers only Disable when healthy', () => {
+      const { container } = mountActions(buildApp(), { name: 'azure-v001', ...coordinates, isDisabled: false });
+
+      expect(menuEntries(container)).toEqual(['Rollback', '---', 'Resize', 'Disable', 'Destroy', 'Clone']);
+    });
+
+    it('offers Enable when instances are out of service but the server group is not disabled', () => {
+      const serverGroup = { name: 'azure-v001', ...coordinates, isDisabled: false, instanceCounts: { outOfService: 2 } };
+
+      const { container } = mountActions(buildApp(), serverGroup);
+
+      expect(menuEntries(container)).toEqual(['Rollback', '---', 'Resize', 'Disable', 'Enable', 'Destroy', 'Clone']);
+    });
+
+    it('drops Rollback and its separator for a disabled server group with no enabled sibling', () => {
+      const app = buildApp({ serverGroups: { data: [{ name: 'azure-v000', ...coordinates, isDisabled: true }] } });
+
+      const { container } = mountActions(app, { name: 'azure-v001', ...coordinates, isDisabled: true });
+
+      expect(menuEntries(container)).toEqual(['Resize', 'Enable', 'Destroy', 'Clone']);
+    });
+
+    it('keeps Rollback for a disabled server group when an enabled sibling exists', () => {
+      const app = buildApp({ serverGroups: { data: [{ name: 'azure-v002', ...coordinates, isDisabled: false }] } });
+
+      const { container } = mountActions(app, { name: 'azure-v001', ...coordinates, isDisabled: true });
+
+      expect(menuEntries(container)).toEqual(['Rollback', '---', 'Resize', 'Enable', 'Destroy', 'Clone']);
+    });
+
+    it('refuses to enable a disabled server group while a resize is in flight', () => {
+      vi.spyOn(ConfirmationModalService, 'confirm').mockReturnValue(undefined);
+      const serverGroup = {
+        name: 'azure-v001',
+        ...coordinates,
+        isDisabled: true,
+        runningTasks: [{ execution: { stages: [{ type: 'resizeServerGroup' }] } }],
+      };
+
+      mountActions(buildApp(), serverGroup);
+      fireEvent.click(screen.getByText('Enable'));
+
+      expect(ConfirmationModalService.confirm).not.toHaveBeenCalled();
+    });
   });
 });

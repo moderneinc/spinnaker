@@ -222,32 +222,63 @@ export function AzureServerGroupActionsComponent({
     }
   };
 
+  // Rolling back a disabled server group restores one of its siblings, so one has to be enabled.
+  const rollbackEnabled =
+    !serverGroup.isDisabled ||
+    app.serverGroups.data.some(
+      (candidate: any) =>
+        candidate.cluster === serverGroup.cluster &&
+        candidate.region === serverGroup.region &&
+        candidate.account === serverGroup.account &&
+        !candidate.isDisabled,
+    );
+
+  const hasDisabledInstances = serverGroup.isDisabled || (serverGroup.instanceCounts?.outOfService ?? 0) > 0;
+
+  const enableLocked =
+    serverGroup.isDisabled &&
+    (serverGroup.runningTasks || []).some((task) =>
+      (task.execution?.stages || []).some((stage: any) => stage.type === 'resizeServerGroup'),
+    );
+
   return (
     <Dropdown className="dropdown" id="azure-server-group-actions-dropdown">
       <Dropdown.Toggle className="btn btn-sm btn-primary dropdown-toggle">Server Group Actions</Dropdown.Toggle>
       <Dropdown.Menu className="dropdown-menu">
-        {!serverGroup.isDisabled && (
+        {rollbackEnabled && (
           <li>
             <a className="clickable" onClick={rollbackServerGroup}>
               Rollback
             </a>
           </li>
         )}
+        {rollbackEnabled && <li role="presentation" className="divider" />}
         <li>
           <a className="clickable" onClick={resizeServerGroup}>
             Resize
           </a>
         </li>
-        <li>
-          <a className="clickable" onClick={disableServerGroup}>
-            Disable
-          </a>
-        </li>
-        <li>
-          <a className="clickable" onClick={enableServerGroup}>
-            Enable
-          </a>
-        </li>
+        {!serverGroup.isDisabled && (
+          <li>
+            <a className="clickable" onClick={disableServerGroup}>
+              Disable
+            </a>
+          </li>
+        )}
+        {hasDisabledInstances && !enableLocked && (
+          <li>
+            <a className="clickable" onClick={enableServerGroup}>
+              Enable
+            </a>
+          </li>
+        )}
+        {enableLocked && (
+          <li className="disabled">
+            <a title="A resize is in progress on this server group">
+              <span className="small glyphicon glyphicon-lock" /> Enable
+            </a>
+          </li>
+        )}
         <li>
           <a className="clickable" onClick={destroyServerGroup}>
             Destroy
