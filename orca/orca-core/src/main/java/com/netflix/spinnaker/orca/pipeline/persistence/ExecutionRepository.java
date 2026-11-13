@@ -131,10 +131,10 @@ public interface ExecutionRepository {
       int queryTimeoutSeconds);
 
   /**
-   * Multi-application batch counterpart to {@link
-   * #retrievePipelineExecutionDetailsForApplication}. Returns the newest executions per
-   * (application, config_id) up to {@code criteria.getPageSize()}, across every application in the
-   * input list, in a single SQL round trip.
+   * Multi-application batch counterpart to {@link #retrievePipelineExecutionDetailsForApplication}.
+   * Returns the newest executions per (application, config_id) up to {@code
+   * criteria.getPageSize()}, across every application in the input list, in a single SQL round
+   * trip.
    *
    * <p>The optional {@code pipelineConfigIds} narrows the result to the supplied set; pass an empty
    * list to mean "no filter — all config ids for these applications."
