@@ -15,6 +15,7 @@ import { AzureImageReader } from '../../image/image.reader';
 import { registerAzureProvider } from '../../azure.module';
 import { AzureServerGroupCommandBuilder } from '../configure/serverGroupCommandBuilder.service';
 import { AzureCloneServerGroupModal } from '../configure/wizard/AzureCloneServerGroupModal';
+import { AzureRollbackServerGroupModal } from './rollback/RollbackServerGroupModal';
 import {
   AzureServerGroupActions as RoutedAzureServerGroupActions,
   AzureServerGroupActionsComponent as AzureServerGroupActions,
@@ -271,7 +272,12 @@ describe('Azure server group details', () => {
     });
 
     it('offers Enable when instances are out of service but the server group is not disabled', () => {
-      const serverGroup = { name: 'azure-v001', ...coordinates, isDisabled: false, instanceCounts: { outOfService: 2 } };
+      const serverGroup = {
+        name: 'azure-v001',
+        ...coordinates,
+        isDisabled: false,
+        instanceCounts: { outOfService: 2 },
+      };
 
       const { container } = mountActions(buildApp(), serverGroup);
 
@@ -292,6 +298,20 @@ describe('Azure server group details', () => {
       const { container } = mountActions(app, { name: 'azure-v001', ...coordinates, isDisabled: true });
 
       expect(menuEntries(container)).toEqual(['Rollback', '---', 'Resize', 'Enable', 'Destroy', 'Clone']);
+    });
+
+    it('rolls back the enabled sibling when the selected server group is disabled', () => {
+      vi.spyOn(AzureRollbackServerGroupModal, 'show').mockReturnValue(undefined as any);
+      const selected = { name: 'azure-v001', ...coordinates, isDisabled: true, instanceCounts: { total: 1 } };
+      const running = { name: 'azure-v002', ...coordinates, isDisabled: false, instanceCounts: { total: 2 } };
+      const app = buildApp({ serverGroups: { data: [selected, running] } });
+
+      mountActions(app, selected);
+      fireEvent.click(screen.getByText('Rollback'));
+
+      const props = (AzureRollbackServerGroupModal.show as Mock).mock.lastCall[0];
+      expect(props.serverGroup.name).toBe('azure-v002');
+      expect(props.disabledServerGroups.map((s: any) => s.name)).toContain('azure-v001');
     });
 
     it('refuses to enable a disabled server group while a resize is in flight', () => {

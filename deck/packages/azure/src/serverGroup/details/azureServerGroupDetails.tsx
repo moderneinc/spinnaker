@@ -25,6 +25,7 @@ import {
 
 import { AzureResizeServerGroupModal } from './resize/AzureResizeServerGroupModal';
 import { AzureRollbackServerGroupModal } from './rollback/RollbackServerGroupModal';
+import { isAzureRollbackAvailable, selectAzureRollbackServerGroups } from './rollback/rollbackServerGroupSelection';
 
 function findServerGroupSummary(props: IServerGroupDetailsProps): Promise<any> {
   const { app, serverGroup } = props;
@@ -200,13 +201,10 @@ export function AzureServerGroupActionsComponent({
   };
 
   const rollbackServerGroup = (): void => {
-    const cluster = (app.clusters || []).find(
-      (candidate: any) => candidate.name === serverGroup.cluster && candidate.account === serverGroup.account,
-    );
-    const disabledServerGroups = (cluster?.serverGroups || []).filter((candidate: any) => {
-      return candidate.isDisabled && candidate.region === serverGroup.region;
-    });
-    AzureRollbackServerGroupModal.show({ application: app, serverGroup, disabledServerGroups }, runtimeServices);
+    const selection = selectAzureRollbackServerGroups(serverGroup, app.serverGroups.data);
+    if (selection) {
+      AzureRollbackServerGroupModal.show({ application: app, ...selection }, runtimeServices);
+    }
   };
 
   const resizeServerGroup = (): void => {
@@ -222,16 +220,7 @@ export function AzureServerGroupActionsComponent({
     }
   };
 
-  // Rolling back a disabled server group restores one of its siblings, so one has to be enabled.
-  const rollbackEnabled =
-    !serverGroup.isDisabled ||
-    app.serverGroups.data.some(
-      (candidate: any) =>
-        candidate.cluster === serverGroup.cluster &&
-        candidate.region === serverGroup.region &&
-        candidate.account === serverGroup.account &&
-        !candidate.isDisabled,
-    );
+  const rollbackEnabled = isAzureRollbackAvailable(serverGroup, app.serverGroups.data);
 
   const hasDisabledInstances = serverGroup.isDisabled || (serverGroup.instanceCounts?.outOfService ?? 0) > 0;
 
