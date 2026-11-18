@@ -25,6 +25,7 @@ import {
 
 import { AzureResizeServerGroupModal } from './resize/AzureResizeServerGroupModal';
 import { AzureRollbackServerGroupModal } from './rollback/RollbackServerGroupModal';
+import { isAzureRollbackAvailable, selectAzureRollbackServerGroups } from './rollback/rollbackServerGroupSelection';
 
 function findServerGroupSummary(props: IServerGroupDetailsProps): Promise<any> {
   const { app, serverGroup } = props;
@@ -200,13 +201,10 @@ export function AzureServerGroupActionsComponent({
   };
 
   const rollbackServerGroup = (): void => {
-    const cluster = (app.clusters || []).find(
-      (candidate: any) => candidate.name === serverGroup.cluster && candidate.account === serverGroup.account,
-    );
-    const disabledServerGroups = (cluster?.serverGroups || []).filter((candidate: any) => {
-      return candidate.isDisabled && candidate.region === serverGroup.region;
-    });
-    AzureRollbackServerGroupModal.show({ application: app, serverGroup, disabledServerGroups }, runtimeServices);
+    const selection = selectAzureRollbackServerGroups(serverGroup, app.serverGroups.data);
+    if (selection) {
+      AzureRollbackServerGroupModal.show({ application: app, ...selection }, runtimeServices);
+    }
   };
 
   const resizeServerGroup = (): void => {
@@ -222,32 +220,54 @@ export function AzureServerGroupActionsComponent({
     }
   };
 
+  const rollbackEnabled = isAzureRollbackAvailable(serverGroup, app.serverGroups.data);
+
+  const hasDisabledInstances = serverGroup.isDisabled || (serverGroup.instanceCounts?.outOfService ?? 0) > 0;
+
+  const enableLocked =
+    serverGroup.isDisabled &&
+    (serverGroup.runningTasks || []).some((task) =>
+      (task.execution?.stages || []).some((stage: any) => stage.type === 'resizeServerGroup'),
+    );
+
   return (
     <Dropdown className="dropdown" id="azure-server-group-actions-dropdown">
       <Dropdown.Toggle className="btn btn-sm btn-primary dropdown-toggle">Server Group Actions</Dropdown.Toggle>
       <Dropdown.Menu className="dropdown-menu">
-        {!serverGroup.isDisabled && (
+        {rollbackEnabled && (
           <li>
             <a className="clickable" onClick={rollbackServerGroup}>
               Rollback
             </a>
           </li>
         )}
+        {rollbackEnabled && <li role="presentation" className="divider" />}
         <li>
           <a className="clickable" onClick={resizeServerGroup}>
             Resize
           </a>
         </li>
-        <li>
-          <a className="clickable" onClick={disableServerGroup}>
-            Disable
-          </a>
-        </li>
-        <li>
-          <a className="clickable" onClick={enableServerGroup}>
-            Enable
-          </a>
-        </li>
+        {!serverGroup.isDisabled && (
+          <li>
+            <a className="clickable" onClick={disableServerGroup}>
+              Disable
+            </a>
+          </li>
+        )}
+        {hasDisabledInstances && !enableLocked && (
+          <li>
+            <a className="clickable" onClick={enableServerGroup}>
+              Enable
+            </a>
+          </li>
+        )}
+        {enableLocked && (
+          <li className="disabled">
+            <a title="A resize is in progress on this server group">
+              <span className="small glyphicon glyphicon-lock" /> Enable
+            </a>
+          </li>
+        )}
         <li>
           <a className="clickable" onClick={destroyServerGroup}>
             Destroy
