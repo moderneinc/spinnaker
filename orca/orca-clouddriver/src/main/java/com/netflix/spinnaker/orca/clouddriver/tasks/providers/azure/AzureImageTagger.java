@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.netflix.spinnaker.orca.api.pipeline.models.StageExecution;
 import com.netflix.spinnaker.orca.clouddriver.OortService;
 import com.netflix.spinnaker.orca.clouddriver.tasks.image.ImageTagger;
-import com.netflix.spinnaker.kork.retrofit.Retrofit2SyncCall;
 import java.util.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -47,8 +46,7 @@ public class AzureImageTagger extends ImageTagger {
     return buildOperations(matchedImages, stageData);
   }
 
-  private OperationContext buildOperationsFromUpstream(
-      StageExecution stage, StageData stageData) {
+  private OperationContext buildOperationsFromUpstream(StageExecution stage, StageData stageData) {
     Collection<String> rawImageIds =
         super.upstreamImageIds(stage, stageData.consideredStages, getCloudProvider());
 
@@ -80,8 +78,7 @@ public class AzureImageTagger extends ImageTagger {
         Map<String, Object> ctx = ancestor.getContext();
         String ancestorImageId = (String) ctx.get("imageId");
         if (resourceId.equals(ancestorImageId)) {
-          account =
-              (String) ctx.getOrDefault("account", ctx.get("credentials"));
+          account = (String) ctx.getOrDefault("account", ctx.get("credentials"));
           region = (String) ctx.get("region");
           break;
         }

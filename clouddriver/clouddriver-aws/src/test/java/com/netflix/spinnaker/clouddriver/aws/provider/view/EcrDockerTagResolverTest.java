@@ -20,11 +20,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.netflix.spinnaker.clouddriver.aws.security.AmazonClientProvider;
-import software.amazon.awssdk.services.ecr.EcrClient;
-import software.amazon.awssdk.services.ecr.model.DescribeImagesRequest;
-import software.amazon.awssdk.services.ecr.model.DescribeImagesResponse;
-import software.amazon.awssdk.services.ecr.model.ImageDetail;
-import software.amazon.awssdk.services.ecr.model.RepositoryNotFoundException;
 import com.netflix.spinnaker.clouddriver.aws.security.AmazonCredentials;
 import com.netflix.spinnaker.clouddriver.aws.security.NetflixAmazonCredentials;
 import com.netflix.spinnaker.credentials.CredentialsRepository;
@@ -34,6 +29,11 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
+import software.amazon.awssdk.services.ecr.EcrClient;
+import software.amazon.awssdk.services.ecr.model.DescribeImagesRequest;
+import software.amazon.awssdk.services.ecr.model.DescribeImagesResponse;
+import software.amazon.awssdk.services.ecr.model.ImageDetail;
+import software.amazon.awssdk.services.ecr.model.RepositoryNotFoundException;
 
 final class EcrDockerTagResolverTest {
 

@@ -33,8 +33,8 @@ import org.springframework.stereotype.Component;
  * still uses the original (pre-canonicalization) values, preserving backward compatibility for
  * pipelines that match on a literal {@code latest} version.
  *
- * <p>If no registered {@link DockerLatestResolver} handles an artifact's reference, the artifact
- * is left unchanged (defensive default — non-ECR registries or unrecognized providers are passed
+ * <p>If no registered {@link DockerLatestResolver} handles an artifact's reference, the artifact is
+ * left unchanged (defensive default — non-ECR registries or unrecognized providers are passed
  * through rather than failing the resolution).
  */
 @Component

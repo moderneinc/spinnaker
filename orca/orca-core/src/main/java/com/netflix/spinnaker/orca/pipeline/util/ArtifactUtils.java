@@ -80,8 +80,8 @@ public class ArtifactUtils {
 
   /**
    * Convenience constructor for tests and legacy callers; uses a no-op {@link
-   * DockerLatestResolutionService} (no resolvers registered, so docker/image:latest artifacts
-   * pass through unchanged).
+   * DockerLatestResolutionService} (no resolvers registered, so docker/image:latest artifacts pass
+   * through unchanged).
    */
   public ArtifactUtils(
       ObjectMapper objectMapper,

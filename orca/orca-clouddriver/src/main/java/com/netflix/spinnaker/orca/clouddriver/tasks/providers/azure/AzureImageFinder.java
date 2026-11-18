@@ -5,10 +5,10 @@ import static java.util.stream.Collectors.toMap;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.netflix.frigga.ami.AppVersion;
+import com.netflix.spinnaker.kork.retrofit.Retrofit2SyncCall;
 import com.netflix.spinnaker.orca.api.pipeline.models.StageExecution;
 import com.netflix.spinnaker.orca.clouddriver.OortService;
 import com.netflix.spinnaker.orca.clouddriver.tasks.image.ImageFinder;
-import com.netflix.spinnaker.kork.retrofit.Retrofit2SyncCall;
 import java.util.*;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -128,8 +128,13 @@ public class AzureImageFinder implements ImageFinder {
               .orElse(null);
 
       return new AzureImageDetails(
-          imageName, region, resourceGroup, osType, uri,
-          isGalleryVersion(version) ? version : null, jenkinsDetails);
+          imageName,
+          region,
+          resourceGroup,
+          osType,
+          uri,
+          isGalleryVersion(version) ? version : null,
+          jenkinsDetails);
     }
 
     @Override

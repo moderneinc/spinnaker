@@ -121,8 +121,7 @@ public class EcrDockerTagResolver {
 
   private static ResolveResult resolveFromDetail(
       ImageDetail detail, String originalReference, String originalTag) {
-    List<String> peerTags =
-        detail.hasImageTags() ? detail.imageTags() : Collections.emptyList();
+    List<String> peerTags = detail.hasImageTags() ? detail.imageTags() : Collections.emptyList();
 
     Optional<String> resolved =
         peerTags.stream()
