@@ -606,7 +606,7 @@ class RedisPermissionsRepositoryTest {
       UserPermission user =
           new UserPermission()
               .setId("parallelUser" + i)
-              .setAccounts(java.util.Set.of(new Account().setName("account" + i)));
+              .setAccounts(Set.of(new Account().setName("account" + i)));
       permissions.put("paralleluser" + i, user);
     }
 
@@ -631,21 +631,21 @@ class RedisPermissionsRepositoryTest {
       UserPermission user =
           new UserPermission()
               .setId("getAllUser" + i)
-              .setRoles(java.util.Set.of(role))
-              .setAccounts(java.util.Set.of(new Account().setName("account" + i)));
+              .setRoles(Set.of(role))
+              .setAccounts(Set.of(new Account().setName("account" + i)));
       permissions.put("getalluser" + i, user);
     }
 
     repo.putAllById(permissions);
 
-    Map<String, java.util.Set<Role>> result = repo.getAllById();
+    Map<String, Set<Role>> result = repo.getAllById();
 
     assertEquals(25, result.size());
     for (int i = 1; i <= 25; i++) {
       final int userIndex = i;
       String userId = "getalluser" + i;
       assertTrue(result.containsKey(userId), "User " + userId + " should be in result");
-      java.util.Set<Role> roles = result.get(userId);
+      Set<Role> roles = result.get(userId);
       assertNotNull(roles, "Roles for " + userId + " should not be null");
       assertEquals(1, roles.size(), "User " + userId + " should have 1 role");
       assertTrue(

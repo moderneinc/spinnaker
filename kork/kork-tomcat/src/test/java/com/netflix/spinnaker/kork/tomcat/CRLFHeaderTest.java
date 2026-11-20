@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Bean;
@@ -23,9 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
     classes = {CRLFHeaderTest.HeaderTestControllerConfiguration.class})
 @TestPropertySource(
     properties = {"logging.level.org.apache.coyote.http11.Http11InputBuffer = DEBUG"})
-@org.springframework.boot.context.properties.EnableConfigurationProperties({
-  TomcatConfigurationProperties.class
-})
+@EnableConfigurationProperties({TomcatConfigurationProperties.class})
 public class CRLFHeaderTest {
   private static final String CR = "\r";
   private static final String LF = "\n";

@@ -21,6 +21,7 @@ import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomize
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import tools.jackson.databind.AnnotationIntrospector;
+import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.introspect.AnnotationIntrospectorPair;
 import tools.jackson.databind.introspect.JacksonAnnotationIntrospector;
 
@@ -33,7 +34,7 @@ import tools.jackson.databind.introspect.JacksonAnnotationIntrospector;
  * only fills gaps.
  */
 @Configuration
-@ConditionalOnClass({JsonMapperBuilderCustomizer.class, tools.jackson.databind.ObjectMapper.class})
+@ConditionalOnClass({JsonMapperBuilderCustomizer.class, ObjectMapper.class})
 public class Jackson2CompatibilityConfiguration {
 
   @Bean

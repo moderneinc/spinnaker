@@ -26,6 +26,7 @@ import com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import com.google.api.client.json.GenericJson;
 import com.google.api.services.compute.Compute;
 import com.google.api.services.compute.model.*;
+import com.google.api.services.compute.model.PathMatcher;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
@@ -731,7 +732,7 @@ public abstract class AbstractUpsertGoogleRegionalHttpLoadBalancerAtomicOperatio
         for (GoogleHostRule hostRule : internalHttpLoadBalancer.getHostRules()) {
           String pathMatcherName = PATH_MATCHER_PREFIX + "-" + UUID.randomUUID().toString();
           GooglePathMatcher pathMatcher = hostRule.getPathMatcher();
-          PathMatcher matcher = new com.google.api.services.compute.model.PathMatcher();
+          PathMatcher matcher = new PathMatcher();
           matcher.setName(pathMatcherName);
           matcher.setDefaultService(
               GCEUtil.buildRegionBackendServiceUrl(

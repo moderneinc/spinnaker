@@ -22,6 +22,7 @@ import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomize
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Restores Jackson 2 (Boot 3) JSON property ordering on Boot 4's Jackson 3 mappers.
@@ -33,7 +34,7 @@ import tools.jackson.databind.MapperFeature;
  * spring.jackson.mapper.SORT_PROPERTIES_ALPHABETICALLY} (e.g. gate, clouddriver).
  */
 @Configuration
-@ConditionalOnClass({JsonMapperBuilderCustomizer.class, tools.jackson.databind.ObjectMapper.class})
+@ConditionalOnClass({JsonMapperBuilderCustomizer.class, ObjectMapper.class})
 @ConditionalOnProperty(
     name = "spring.jackson.mapper.SORT_PROPERTIES_ALPHABETICALLY",
     havingValue = "false",

@@ -503,8 +503,7 @@ public class KubectlJobExecutor {
         executeList(credentials, kinds, namespace, selectors);
 
     if (status.getResult() != JobResult.Result.SUCCESS) {
-      boolean permissionError =
-          org.apache.commons.lang3.StringUtils.containsIgnoreCase(status.getError(), "forbidden");
+      boolean permissionError = StringUtils.containsIgnoreCase(status.getError(), "forbidden");
       if (permissionError) {
         log.warn(status.getError());
       } else {
@@ -552,8 +551,7 @@ public class KubectlJobExecutor {
         executeList(credentials, kinds, namespace, selectors);
 
     if (status.getResult() != JobResult.Result.SUCCESS) {
-      boolean permissionError =
-          org.apache.commons.lang3.StringUtils.containsIgnoreCase(status.getError(), "forbidden");
+      boolean permissionError = StringUtils.containsIgnoreCase(status.getError(), "forbidden");
       if (permissionError) {
         log.warn(status.getError());
         throw new KubectlForbiddenException(

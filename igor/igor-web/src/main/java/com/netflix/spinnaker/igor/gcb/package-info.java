@@ -14,5 +14,7 @@
  * limitations under the License.
  */
 
-@com.netflix.spinnaker.kork.annotations.NonnullByDefault
+@NonnullByDefault
 package com.netflix.spinnaker.igor.gcb;
+
+import com.netflix.spinnaker.kork.annotations.NonnullByDefault;

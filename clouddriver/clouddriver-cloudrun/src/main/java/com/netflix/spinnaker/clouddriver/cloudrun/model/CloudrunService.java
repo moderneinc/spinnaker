@@ -16,10 +16,11 @@
 
 package com.netflix.spinnaker.clouddriver.cloudrun.model;
 
+import com.google.api.client.json.GenericJson;
 import com.google.api.services.run.v1.model.ServiceStatus;
 import java.util.LinkedHashMap;
 
-public class CloudrunService extends com.google.api.client.json.GenericJson {
+public class CloudrunService extends GenericJson {
 
   /**
    * The API version for this call such as "serving.knative.dev/v1". The value may be {@code null}.

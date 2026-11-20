@@ -22,6 +22,7 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 
@@ -29,7 +30,7 @@ import org.springframework.util.Assert;
  * Vendored from Spring Framework 6.2 {@code OkHttp3ClientHttpResponse} (removed in Spring 7). See
  * {@link SpinnakerOkHttpClientRequestFactory} for rationale.
  */
-class SpinnakerOkHttpClientResponse implements org.springframework.http.client.ClientHttpResponse {
+class SpinnakerOkHttpClientResponse implements ClientHttpResponse {
 
   private final Response response;
 

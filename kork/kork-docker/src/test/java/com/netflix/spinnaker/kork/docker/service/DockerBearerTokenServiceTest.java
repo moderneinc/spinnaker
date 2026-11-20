@@ -20,14 +20,21 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.netflix.spinnaker.config.DefaultServiceClientProvider;
 import com.netflix.spinnaker.config.DefaultServiceEndpoint;
+import com.netflix.spinnaker.config.okhttp3.DefaultOkHttpClientBuilderProvider;
+import com.netflix.spinnaker.config.okhttp3.OkHttpClientProvider;
+import com.netflix.spinnaker.kork.client.ServiceClientProvider;
 import com.netflix.spinnaker.kork.docker.model.DockerBearerToken;
+import com.netflix.spinnaker.okhttp.OkHttpClientConfigurationProperties;
+import com.netflix.spinnaker.okhttp.Retrofit2EncodeCorrectionInterceptor;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Base64;
+import okhttp3.OkHttpClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -38,14 +45,14 @@ import retrofit2.Response;
 
 @SpringBootTest(
     classes = {
-      com.netflix.spinnaker.okhttp.OkHttpClientConfigurationProperties.class,
-      com.netflix.spinnaker.kork.client.ServiceClientProvider.class,
-      com.netflix.spinnaker.config.okhttp3.OkHttpClientProvider.class,
-      com.netflix.spinnaker.okhttp.Retrofit2EncodeCorrectionInterceptor.class,
-      okhttp3.OkHttpClient.class,
-      com.netflix.spinnaker.config.DefaultServiceClientProvider.class,
-      com.netflix.spinnaker.config.okhttp3.DefaultOkHttpClientBuilderProvider.class,
-      com.fasterxml.jackson.databind.ObjectMapper.class
+      OkHttpClientConfigurationProperties.class,
+      ServiceClientProvider.class,
+      OkHttpClientProvider.class,
+      Retrofit2EncodeCorrectionInterceptor.class,
+      OkHttpClient.class,
+      DefaultServiceClientProvider.class,
+      DefaultOkHttpClientBuilderProvider.class,
+      ObjectMapper.class
     },
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
 public class DockerBearerTokenServiceTest {
