@@ -60,8 +60,7 @@ public class SpinnakerHttpException extends SpinnakerServerException {
    * The constructor handles the HTTP retrofit2 exception, similar to retrofit logic. It is used
    * with {@link com.netflix.spinnaker.kork.retrofit.ErrorHandlingExecutorCallAdapterFactory}.
    */
-  public SpinnakerHttpException(
-      retrofit2.Response<?> retrofit2Response, retrofit2.Retrofit retrofit) {
+  public SpinnakerHttpException(retrofit2.Response<?> retrofit2Response, Retrofit retrofit) {
     super(retrofit2Response.raw().request());
     this.retrofit2Response = retrofit2Response;
     if ((retrofit2Response.code() == HttpStatus.NOT_FOUND.value())

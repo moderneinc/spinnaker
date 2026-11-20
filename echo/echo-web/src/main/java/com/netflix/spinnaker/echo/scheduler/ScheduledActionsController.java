@@ -31,6 +31,7 @@ import java.util.Set;
 import java.util.TimeZone;
 import java.util.stream.Collectors;
 import org.quartz.*;
+import org.quartz.CronTrigger;
 import org.quartz.impl.matchers.GroupMatcher;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -89,7 +90,7 @@ public class ScheduledActionsController {
       throw new IllegalArgumentException(errorMessage);
     }
 
-    org.quartz.CronTrigger trigger =
+    CronTrigger trigger =
         (CronTrigger) scheduler.getTrigger(triggerKey(newTrigger.getId(), USER_TRIGGER_GROUP));
 
     if (trigger != null) {
@@ -133,8 +134,7 @@ public class ScheduledActionsController {
   @ResponseStatus(HttpStatus.ACCEPTED)
   public TriggerDescription deleteScheduledAction(@PathVariable String id)
       throws SchedulerException {
-    org.quartz.CronTrigger trigger =
-        (CronTrigger) scheduler.getTrigger(triggerKey(id, USER_TRIGGER_GROUP));
+    CronTrigger trigger = (CronTrigger) scheduler.getTrigger(triggerKey(id, USER_TRIGGER_GROUP));
 
     if (trigger == null) {
       throw new NotFoundException("Trigger with id: " + id + " not be found");

@@ -272,7 +272,7 @@ class ApiTokenAuthenticationFilterTest {
     when(permissionEvaluator.getPermission(PRINCIPAL))
         .thenReturn(viewWith(false, "deploy-team", "ops"));
     when(allowedAccountsSupport.filterAllowedAccounts(eq(PRINCIPAL), anyCollection()))
-        .thenReturn(java.util.List.of("prod-account", "stage-account"));
+        .thenReturn(List.of("prod-account", "stage-account"));
 
     filter.doFilterInternal(
         requestWithBearer(PLAINTEXT), new MockHttpServletResponse(), new MockFilterChain());

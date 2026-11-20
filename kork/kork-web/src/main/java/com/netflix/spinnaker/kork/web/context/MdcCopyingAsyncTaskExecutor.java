@@ -66,7 +66,7 @@ public class MdcCopyingAsyncTaskExecutor implements AsyncTaskExecutor {
   }
 
   @Override
-  public java.util.concurrent.Future<?> submit(Runnable task) {
+  public Future<?> submit(Runnable task) {
     return delegate.submit(wrapWithContext(task));
   }
 

@@ -42,6 +42,7 @@ import com.netflix.spinnaker.clouddriver.cloudfoundry.model.CloudFoundrySpace;
 import com.netflix.spinnaker.clouddriver.cloudfoundry.provider.CloudFoundryProvider;
 import com.netflix.spinnaker.clouddriver.cloudfoundry.security.CloudFoundryCredentials;
 import java.util.*;
+import java.util.HashMap;
 import javax.annotation.Nullable;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -76,7 +77,7 @@ public class CloudFoundryLoadBalancerCachingAgent extends AbstractCloudFoundryCa
             providerCache.filterIdentifiers(ON_DEMAND.getNs(), Keys.getAllLoadBalancers()));
 
     List<String> toEvict = new ArrayList<>();
-    Map<String, CacheData> toKeep = new java.util.HashMap<>();
+    Map<String, CacheData> toKeep = new HashMap<>();
     onDemandCacheData.forEach(
         cacheData -> {
           long cacheTime = (long) cacheData.getAttributes().get("cacheTime");
@@ -103,7 +104,7 @@ public class CloudFoundryLoadBalancerCachingAgent extends AbstractCloudFoundryCa
                                             Keys.getServerGroupKey(
                                                 sg.getAccount(), sg.getName(), sg.getRegion()),
                                             emptyMap(),
-                                            new java.util.HashMap<>()))
+                                            new HashMap<>()))
                                 .getRelationships()
                                 .computeIfAbsent(LOAD_BALANCERS.getNs(), k -> new HashSet<>())
                                 .add(lb.getId())));

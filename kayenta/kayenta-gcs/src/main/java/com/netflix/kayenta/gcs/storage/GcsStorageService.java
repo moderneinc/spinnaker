@@ -178,7 +178,7 @@ public class GcsStorageService implements StorageService {
 
   private <T> T deserialize(Storage storage, StorageObject object, TypeReference<T> typeReference)
       throws IOException {
-    ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
     Storage.Objects.Get getter = storage.objects().get(object.getBucket(), object.getName());
     getter.executeMediaAndDownloadTo(output);
     String json = output.toString("UTF8");

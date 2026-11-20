@@ -31,6 +31,7 @@ import com.netflix.spinnaker.clouddriver.azure.resources.vmimage.model.AzureMana
 import com.netflix.spinnaker.clouddriver.azure.security.AzureCredentials;
 import com.netflix.spinnaker.clouddriver.cache.CustomScheduledAgent;
 import java.util.*;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -51,7 +52,7 @@ public class AzureManagedImageCachingAgent
   private final long pollIntervalMillis;
   private final long timeoutMillis;
 
-  private static final java.util.Set<AgentDataType> types =
+  private static final Set<AgentDataType> types =
       Set.of(AUTHORITATIVE.forType(Keys.Namespace.AZURE_MANAGEDIMAGES.toString()));
 
   public AzureManagedImageCachingAgent(

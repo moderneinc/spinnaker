@@ -611,7 +611,7 @@ class CloudFoundryServerGroupCachingAgentTest {
                         onDemandCloudFoundryServerGroup.getName(),
                         onDemandCloudFoundryServerGroup.getRegion()),
                     (int) TimeUnit.MINUTES.toSeconds(10), // ttl
-                    io.vavr.collection.HashMap.<String, Object>of(
+                    HashMap.<String, Object>of(
                             "cacheTime",
                             internalClock.instant().plusSeconds(600).toEpochMilli(),
                             "cacheResults",

@@ -713,11 +713,11 @@ public class DockerRegistryClient {
 
       // Extract the history array and v1Compatibility JSON
       Object historyObj = manifest.get("history");
-      if (!(historyObj instanceof java.util.List) || ((java.util.List<?>) historyObj).isEmpty()) {
+      if (!(historyObj instanceof List) || ((List<?>) historyObj).isEmpty()) {
         throw new DockerRegistryOperationException(
             "Manifest history is missing or empty for " + key);
       }
-      Object v1CompatibilityObj = ((java.util.List<?>) historyObj).get(0);
+      Object v1CompatibilityObj = ((List<?>) historyObj).get(0);
       if (!(v1CompatibilityObj instanceof Map)) {
         v1CompatibilityObj = getObjectMapper().readValue(v1CompatibilityObj.toString(), Map.class);
       }

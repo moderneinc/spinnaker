@@ -33,6 +33,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.access.PermissionEvaluator;
 import org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler;
@@ -54,7 +55,7 @@ import retrofit2.converter.jackson.JacksonConverterFactory;
 @Configuration
 @EnableConfigurationProperties(FiatClientConfigurationProperties.class)
 @ComponentScan("com.netflix.spinnaker.fiat.shared")
-@Order(org.springframework.core.Ordered.LOWEST_PRECEDENCE)
+@Order(Ordered.LOWEST_PRECEDENCE)
 public class FiatAuthenticationConfig {
 
   @Bean
